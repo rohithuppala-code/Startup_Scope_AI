@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import InputForm from './components/InputForm'
 import ReportView from './components/ReportView'
+import ValidationTimeline from './components/ValidationTimeline'
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [validationData, setValidationData] = useState(null);
   const [error, setError] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   const handleValidate = async (formData) => {
     setIsLoading(true);
@@ -16,6 +19,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: userId,
           idea: {
             idea_id: "session_" + Math.random().toString(36).substr(2, 9),
             ...formData
@@ -29,6 +33,7 @@ function App() {
 
       const data = await response.json();
       setValidationData(data.report);
+      setUserId(data.user_id);
       // Notice we are ignoring data.markdown_report for the UI currently, as we use structured parts.
 
     } catch (err) {
@@ -55,6 +60,16 @@ function App() {
           <p className="text-lg text-gray-600 dark:text-gray-400 max-w-xl mx-auto">
             The world's most brutal, real-time AI Venture Capitalist. Stop guessing. Start validating.
           </p>
+          
+          {/* Timeline Toggle */}
+          {userId && (
+            <button
+              onClick={() => setShowTimeline(!showTimeline)}
+              className="mt-4 px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors"
+            >
+              {showTimeline ? 'New Validation' : 'View History'}
+            </button>
+          )}
         </header>
 
         {/* Error State */}
@@ -65,7 +80,11 @@ function App() {
         )}
 
         {/* View Switcher */}
-        {!validationData ? (
+        {showTimeline && userId ? (
+          <div className="w-full max-w-4xl">
+            <ValidationTimeline userId={userId} />
+          </div>
+        ) : !validationData ? (
           <InputForm onSubmit={handleValidate} isLoading={isLoading} />
         ) : (
           <ReportView report={validationData} onReset={() => setValidationData(null)} />
