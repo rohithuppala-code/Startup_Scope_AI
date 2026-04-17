@@ -6,8 +6,12 @@ import uuid
 from .input_parser import StartupIdea, ValidationReport
 from .analysis_engine import AnalysisEngine
 from .report_generator import ReportGenerator
+from .analytics_router import router as analytics_router
 
 app = FastAPI(title="StartupScope AI API", description="Validate your startup idea using an elite AI VC analyst.")
+
+# Include analytics router
+app.include_router(analytics_router)
 
 # Configure CORS for the frontend
 app.add_middleware(
@@ -33,7 +37,7 @@ class ValidateResponse(BaseModel):
 async def validate_idea(req: ValidateRequest):
     try:
         u_id = req.user_id if req.user_id else str(uuid.uuid4())
-        report = engine.run_validation(idea_input=req.idea, user_id=u_id)
+        report = await engine.run_validation(idea_input=req.idea, user_id=u_id)
         
         md_report = ReportGenerator.generate_markdown(report, req.idea.description)
         

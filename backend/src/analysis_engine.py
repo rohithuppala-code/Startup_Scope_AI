@@ -4,6 +4,8 @@ from .memento_manager import MementoManager
 from .llm_client import LLMClient
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 from .data_cleaner import clean_markdown, limit_context
+from .validation_service import ValidationService
+from .database import AsyncSessionLocal
 
 class AnalysisEngine:
     def __init__(self):
@@ -11,7 +13,7 @@ class AnalysisEngine:
         self.memento = MementoManager()
         self.llm = LLMClient()
 
-    def run_validation(self, idea_input: StartupIdea, user_id: str) -> ValidationReport:
+    async def run_validation(self, idea_input: StartupIdea, user_id: str) -> ValidationReport:
         # 1. Check history
         history_context = self.memento.fetch_history(user_id=user_id)
         history_context = limit_context(history_context, max_chars=2000)
@@ -40,5 +42,14 @@ class AnalysisEngine:
         # 5. Save to memory
         memory_summary = f"Idea: {idea_input.description}. Score: {report.feasibility_score}. Feedback: {report.suggested_improvements[0]}"
         self.memento.append_history(user_id=user_id, text=memory_summary)
+
+        # 6. Store validation in database for timeline
+        try:
+            async with AsyncSessionLocal() as db:
+                validation_service = ValidationService(db)
+                await validation_service.store_validation(user_id, idea_input, report)
+        except Exception as e:
+            # Log error but don't fail validation if storage fails
+            print(f"Warning: Failed to store validation in database: {e}")
 
         return report
