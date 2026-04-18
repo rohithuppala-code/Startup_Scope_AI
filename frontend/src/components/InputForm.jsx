@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function InputForm({ onSubmit, isLoading }) {
+export default function InputForm({ onSubmit, isLoading, loadingStatus }) {
   const [formData, setFormData] = useState({
     description: '',
     target_market: '',
@@ -82,9 +82,9 @@ export default function InputForm({ onSubmit, isLoading }) {
           className={`w-full py-4 mt-6 rounded-xl font-semibold text-white shadow-lg transition-all ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 hover:-translate-y-1 hover:shadow-purple-500/30'}`}
         >
           {isLoading ? (
-            <div className="flex items-center justify-center space-x-2">
+            <div className="flex items-center justify-center space-x-3">
               <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              <span>Validating Idea (Takes 15-30s)...</span>
+              <span>{loadingStatus || 'Validating Idea...'}</span>
             </div>
           ) : 'Run Deep Analytics & Scrape Web'}
         </button>

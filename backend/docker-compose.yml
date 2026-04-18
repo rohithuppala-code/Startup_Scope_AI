@@ -1,0 +1,70 @@
+
+
+
+# docker-compose.yml
+#
+# Runs the local infrastructure for StartupScope AI.
+# The application (FastAPI + Celery worker) runs on the HOST machine, not in
+# containers, so all ports are mapped to host localhost. If you ever containerize
+# the app itself, update REDIS_URL and CELERY_BROKER_URL to use the service names
+# (redis, rabbitmq) instead of localhost.
+#
+# BUG FIX: Removed `version: '3.8'` — it is obsolete in Compose V2 and triggers
+# a deprecation warning on every `docker compose up`. Compose V2 infers the
+# schema version automatically.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: startupscope_redis
+    # BUG FIX: Added restart policy. Without it a crashed Redis stays dead until
+    # someone manually restarts the container, violating "Fail-safe by design".
+    restart: unless-stopped
+    ports:
+      - "6380:6379"   # Host 6380 → container 6379 (avoids clashing with local Redis)
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: startupscope_rabbitmq
+    # BUG FIX: Added restart policy (same reasoning as Redis above).
+    restart: unless-stopped
+    ports:
+      - "5673:5672"   # Host 5673 → container 5672 AMQP
+      - "15673:15672" # Host 15673 → container 15672 Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # NOTE: The `postgres` service from the original has been REMOVED.
+  #
+  # BUG FIX: supabase-py communicates via the Supabase PostgREST HTTP API —
+  # it does NOT connect over TCP/psycopg2 to a raw PostgreSQL server.
+  # A plain `postgres:15-alpine` image has none of the required Supabase
+  # extensions (auth schema, storage schema, PostgREST, GoTrue, Kong, etc.),
+  # so supabase-py would fail to connect to it with an HTTP 404/connection error.
+  # The service was occupying port 54322 and consuming memory while being
+  # completely unused by any application code.
+  #
+  # For local Supabase development use the official Supabase local stack:
+  #   https://supabase.com/docs/guides/local-development
+  # which runs the full suite via:  npx supabase start
+  # For staging/production, point SUPABASE_URL at your cloud project.
+
+volumes:
+  redis_data:
+  rabbitmq_data:

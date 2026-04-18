@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function ValidationTimeline({ userId }) {
+export default function ValidationTimeline({ userId, onViewReport }) {
   const [validations, setValidations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,7 +17,7 @@ export default function ValidationTimeline({ userId }) {
     setError(null);
     try {
       const response = await fetch(
-        `http://localhost:8000/api/analytics/timeline?user_id=${userId}&limit=50`
+        `http://localhost:8005/api/analytics/timeline?user_id=${userId}&limit=50`
       );
       
       if (!response.ok) {
@@ -93,33 +93,53 @@ export default function ValidationTimeline({ userId }) {
 
       {validations.map((validation) => (
         <div
-          key={validation.validation_id}
-          className="backdrop-blur-lg bg-white/10 dark:bg-black/30 border border-white/20 dark:border-gray-800 rounded-2xl p-6 shadow-lg transition-all hover:shadow-xl"
+          key={validation.id}
+          className="backdrop-blur-lg bg-white/10 dark:bg-black/30 border border-white/20 dark:border-gray-800 rounded-2xl p-6 shadow-lg transition-all hover:shadow-xl relative"
         >
+          {/* Status Badge */}
+          {validation.status === 'processing' && (
+             <div className="absolute top-4 right-4 bg-yellow-500/20 text-yellow-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
+               <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse mr-2"></span>
+               Processing
+             </div>
+          )}
+          {validation.status === 'queued' && (
+             <div className="absolute top-4 right-4 bg-gray-500/20 text-gray-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+               Queued
+             </div>
+          )}
+          {validation.status === 'failed' && (
+             <div className="absolute top-4 right-4 bg-red-500/20 text-red-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+               Failed
+             </div>
+          )}
+
           {/* Header */}
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between mb-4 mt-2">
             <div className="flex-1">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                {formatDate(validation.timestamp)}
+                {formatDate(validation.created_at)}
               </p>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
-                {validation.idea_description}
+                {validation.idea_description || "Untitled Idea"}
               </h3>
             </div>
             
-            {/* Feasibility Score Badge */}
-            <div className="ml-4 flex flex-col items-center">
-              <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-purple-500/20 to-indigo-500/20 shadow-inner">
-                <span className={`text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${getFeasibilityColor(validation.feasibility_score)}`}>
-                  {Math.round(validation.feasibility_score)}
-                </span>
+            {/* Feasibility Score Badge (only if completed) */}
+            {validation.status === 'completed' && (
+              <div className="ml-4 flex flex-col items-center mt-2">
+                <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-purple-500/20 to-indigo-500/20 shadow-inner">
+                  <span className={`text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${getFeasibilityColor(validation.feasibility_score)}`}>
+                    {Math.round(validation.feasibility_score || 0)}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Score</span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Score</span>
-            </div>
+            )}
           </div>
 
           {/* Top 3 Gaps Preview */}
-          {validation.identified_gaps && validation.identified_gaps.length > 0 && (
+          {validation.status === 'completed' && validation.identified_gaps && validation.identified_gaps.length > 0 && (
             <div className="mb-4">
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Top Identified Gaps:
@@ -136,15 +156,27 @@ export default function ValidationTimeline({ userId }) {
           )}
 
           {/* Expand/Collapse Button */}
-          <button
-            onClick={() => setExpandedId(expandedId === validation.validation_id ? null : validation.validation_id)}
-            className="w-full mt-4 py-2 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
-          >
-            {expandedId === validation.validation_id ? 'Show Less' : 'Show Full Report'}
-          </button>
+          {validation.status === 'completed' && (
+            <div className="flex space-x-2 mt-4">
+              <button
+                onClick={() => setExpandedId(expandedId === validation.id ? null : validation.id)}
+                className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
+              >
+                {expandedId === validation.id ? 'Hide Inline Preview' : 'Preview Details'}
+              </button>
+              {onViewReport && (
+                <button
+                  onClick={() => onViewReport(validation)}
+                  className="flex-1 py-2 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Full Report View
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Expanded Content */}
-          {expandedId === validation.validation_id && (
+          {expandedId === validation.id && validation.status === 'completed' && (
             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-6">
               {/* Competitor Analysis */}
               {validation.competitor_analysis && (

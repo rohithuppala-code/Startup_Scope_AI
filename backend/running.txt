@@ -1,0 +1,9 @@
+First Step: 
+Go to Backend folder.
+Create a Venv: "python3 -m venv .venv" (change the command for windows)
+then in the venv run "pip install -r requirements.txt"
+then run "./startup.sh"
+
+MAKE SURE YOU HAV DOCKER IN YOUR LAPTOP.
+
+As it is a private repo, I pushed the env file. Please dont share the gemini api key.
