@@ -1,0 +1,50 @@
+TIER 1 — Intelligence upgrades
+1. Multi-model consensus engine
+All three models have free tiers. Gemini 1.5 Pro via Google AI Studio (free tier, 1500 requests/day). GPT-4o-mini via OpenAI free tier ($5 credit on signup, lasts a long time at mini pricing). Claude 3.5 Haiku via Anthropic free tier ($5 credit). Run all three in parallel via Celery chord. At this scale the free credits last months during development. No paid dependency needed.
+2. Temporal trend tracking
+Completely free — this is pure internal logic. Celery Beat is already in your stack (it's part of Celery, no extra cost). Supabase free tier gives you 500MB database which is more than enough to store versioned JSON reports. The diff engine is plain Python (deepdiff library, free and open source). Zero new paid dependencies.
+3. RAG grounding layer
+pgvector is a free open-source Postgres extension and Supabase enables it for free on all plans. For embeddings, replace OpenAI text-embedding-3-small with a locally-run sentence-transformers model (all-MiniLM-L6-v2, completely free, runs on CPU in your Docker container). LangChain is open source and free. Total cost: zero.
+4. Structured output + self-heal
+Pydantic v2 is open source and free. The instructor library is open source and free. Tenacity (retry library) is open source and free. No APIs involved — this is pure Python library work. Total cost: zero.
+
+TIER 2 — Pipeline and data depth
+5. Funding intelligence pipeline
+Crunchbase paid API costs $500+/month — drop it entirely. Replace with free alternatives. OpenCorporates API has a free tier for company data. The real goldmine is scraping Crunchbase public pages directly via Firecrawl (which you already have and already paid for or are using free tier). You can also use the Y Combinator companies dataset (public JSON on GitHub, free forever) for startup funding data. For recent rounds, scrape TechCrunch funding articles via Firecrawl — they publish every round publicly. Zero new paid dependencies.
+6. Social sentiment engine
+Reddit API is completely free (OAuth2, 100 requests/minute, more than enough). Twitter/X API free tier gives 500,000 tweet reads/month. Apify has a free tier with $5/month credits. For sentiment classification, instead of a paid model use a locally-run model: cardiffnlp/twitter-roberta-base-sentiment on HuggingFace, completely free, runs in your Docker container with just 500MB RAM. Or use Gemini Flash which has a free tier (15 requests/minute, 1 million tokens/day free).
+7. Patent and IP moat scan
+USPTO PatentsView API is completely free — it is a US government public API with no key required. EPO Open Patent Services also has a free tier (registered access, 3000 calls/month free). Both are genuinely free by design as public infrastructure. This feature costs nothing.
+8. Job posting signal
+Apify free tier gives $5/month in credits which covers hundreds of LinkedIn scrapes. Alternatively use the completely free approach: JSearch API on RapidAPI has a free tier (500 requests/month). Or use SerpAPI's free tier (100 searches/month). For a completely zero-cost approach, scrape LinkedIn public job pages directly via Firecrawl — job counts on company pages are publicly visible without login.
+9. Web traffic intelligence
+SimilarWeb and Semrush are both expensive paid APIs — drop them. Replace with free alternatives. SerpAPI free tier (100/month) lets you scrape Google search result counts as a traffic proxy. A better free approach: use the Wayback Machine CDX API (completely free, no key) to count how often a domain has been crawled as a rough traffic signal. Best free approach: CommonCrawl (completely free, petabytes of public web data) combined with a domain frequency count gives real traffic estimates. Also Majestic has a free tier for backlink/authority data which correlates strongly with traffic.
+10. Pricing intelligence crawler
+Already completely free. Firecrawl is already in your stack. Just point it at /pricing pages. Gemini free tier handles the extraction. Zero additional cost — this is the easiest win on the entire list.
+
+TIER 3 — User experience and platform
+11. Progressive streaming output
+Completely free. Redis is already in your stack. Celery is already in your stack. WebSockets are already in your stack. This is pure architectural refactoring — split one big task into section subtasks. No new dependencies, no new cost.
+12. Conversational follow-up
+pgvector is free on Supabase. sentence-transformers for embeddings is free and runs locally. Gemini free tier handles the multi-turn conversation (15 RPM, 1M tokens/day free). FastAPI is already in your stack. This entire feature costs zero — just a new endpoint and a pgvector table.
+13. PDF and pitch deck export
+WeasyPrint is open source and completely free. python-pptx is open source and completely free. Jinja2 is open source and free. Supabase free tier gives 1GB file storage which is enormous for PDFs. Total cost: zero. Install via pip and write templates.
+14. Team collaboration
+Supabase Row Level Security is a core Postgres feature, completely free on all Supabase plans. Supabase Realtime is free up to 200 concurrent connections on the free plan — more than enough. For email invites, Resend has a free tier with 3,000 emails/month and 100/day. Total cost: zero during development and early production.
+15. Idea comparison engine
+Completely free. Celery group and chord are already part of Celery — no additional cost. Gemini free tier handles the synthesis comparison call. This is pure Celery orchestration logic with one extra Gemini call. Zero new paid dependencies.
+16. Smart monitoring alerts
+Celery Beat is free and already in your stack. Resend free tier (3,000 emails/month) handles all alert emails. Supabase Realtime handles in-app notifications for free. The diff engine is plain Python (deepdiff, free). Total cost: zero.
+
+TIER 4 — Infrastructure hardening
+17. Priority queue and dead-letter queue
+RabbitMQ priority queues and dead-letter exchanges are core RabbitMQ features, completely free — this is just configuration, not a paid feature. For Slack alerts on DLQ failures, Slack incoming webhooks are completely free with no limits. Total cost: zero — just RabbitMQ config changes.
+18. Full observability stack
+OpenTelemetry SDK is open source and free. Replace Grafana Cloud with a self-hosted stack running in Docker: Prometheus + Grafana + Loki + Tempo all have completely free Docker images. Add them to your docker-compose.yml. Grafana Cloud also has a genuinely free forever tier (10k metrics, 50GB logs, 50GB traces) which requires no self-hosting at all. Total cost: zero.
+19. AI cost control layer
+tiktoken is open source and free (released by OpenAI). Redis INCRBYFLOAT is a core Redis command, no extra cost. The cost_ledger table is just a Supabase table. sentence-transformers for the cosine trimming step is free and local. Total cost: zero — this is entirely free library and infrastructure work.
+20. Outbound webhook system
+Completely free. This is pure application code — a Celery task, HMAC signing using Python's built-in hmac library (no external dependency), and a webhook_logs table in Supabase. The exponential backoff is handled by tenacity which is already in your stack for feature 4. Zero new paid dependencies.
+
+Summary of what actually costs money vs what is free
+Every single feature above can be built for free. The only things that have genuine paid walls are Crunchbase API (replaced with Firecrawl scraping + public datasets), SimilarWeb/Semrush (replaced with CommonCrawl + SerpAPI free tier), and heavy Apify usage beyond the free $5/month credit (replaced with direct Firecrawl scraping). Everything else — pgvector, sentence-transformers, WeasyPrint, python-pptx, Celery Beat, Supabase free tier, Reddit API, USPTO API, EPO API, OpenTelemetry, Prometheus, Grafana, Resend free tier, RabbitMQ config, tiktoken, Pydantic, instructor, tenacity, deepdiff — is either open source, a free government API, or has a free tier that covers your entire development and early production phase.

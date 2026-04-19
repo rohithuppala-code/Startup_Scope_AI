@@ -86,6 +86,7 @@ except Exception as e:
 
 # ─── TEST 5: Valid Submit → 202 ────────────────────────────────
 section("TEST 5 — POST /api/v1/validate (valid request → 202 Accepted)")
+time.sleep(2.5)
 IDEA = f"An AI-powered SaaS platform that automates the generation of unit tests for Python and JavaScript codebases. [Test Run {int(time.time())}]"
 headers = {"x-user-id": user_id, "Content-Type": "application/json"}
 payload = {

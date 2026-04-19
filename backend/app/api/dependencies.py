@@ -6,7 +6,7 @@ from typing import Dict
 
 # Simple in-memory storage for rate limiting (User ID -> Last Request Timestamp)
 _last_request_time: Dict[str, float] = {}
-RATE_LIMIT_SECONDS = 10 
+RATE_LIMIT_SECONDS = 2 
 
 async def rate_limit_user(
     x_user_id: str = Header(..., description="User ID (UUID) for the request")

@@ -14,6 +14,10 @@ from supabase import create_client, Client
 from app.api.auth import router as auth_router
 from app.api.dependencies import rate_limit_user
 from app.api.ws_router import router as ws_router
+from app.api.chat_router import router as chat_router
+from app.api.export_router import router as export_router
+from app.api.comparison_router import router as comparison_router
+from app.api.workspace_router import router as workspace_router
 from app.core.config import settings
 from app.schemas.validation import ValidationRequest, ValidationResponse
 from app.websockets.manager import manager
@@ -32,6 +36,22 @@ celery_app = Celery(
 celery_app.conf.update(
     task_always_eager=False,
     broker_connection_retry_on_startup=True,
+    # ── Queue declarations MUST match the worker's config ─────────────
+    # The worker declares the 'default' queue with x-dead-letter-exchange
+    # and x-dead-letter-routing-key args. If the producer tries to declare
+    # the same queue WITHOUT those args, RabbitMQ returns 406
+    # PRECONDITION_FAILED and send_task silently fails.
+    task_queues={
+        "default": {
+            "exchange": "default",
+            "routing_key": "default",
+            "queue_arguments": {
+                "x-max-priority": 10,
+                "x-dead-letter-exchange": "dlx",
+                "x-dead-letter-routing-key": "dlq",
+            },
+        },
+    },
 )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +74,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="StartupScope AI", version="1.0.0", lifespan=lifespan)
 app.include_router(ws_router)
 app.include_router(auth_router)
+app.include_router(chat_router)          # Feature 12: Conversational RAG
+app.include_router(export_router)        # Feature 13: PDF Export
+app.include_router(workspace_router)     # Feature 14: Team Collaboration
+app.include_router(comparison_router)    # Feature 15: Idea Comparison Engine
 
 # Service-role client bypasses Row Level Security — never expose to the frontend.
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
@@ -149,6 +173,7 @@ async def create_validation(
                     "validation_id": validation_id,
                     "idea_hash": idea_hash,
                 },
+                queue="default",
             ),
         )
     except Exception as dispatch_err:
