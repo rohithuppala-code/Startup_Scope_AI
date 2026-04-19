@@ -11,9 +11,8 @@ CREATE TABLE public.funding_intelligence (
   source_url text,
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT funding_intelligence_pkey PRIMARY KEY (id),
-  CONSTRAINT funding_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT funding_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.jobs_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -21,9 +20,8 @@ CREATE TABLE public.jobs_intelligence (
   open_roles jsonb,
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT jobs_intelligence_pkey PRIMARY KEY (id),
-  CONSTRAINT jobs_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT jobs_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.patent_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -31,9 +29,8 @@ CREATE TABLE public.patent_intelligence (
   patents_found jsonb,
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT patent_intelligence_pkey PRIMARY KEY (id),
-  CONSTRAINT patent_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT patent_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.pricing_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -43,21 +40,19 @@ CREATE TABLE public.pricing_intelligence (
   gap_analysis text,
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT pricing_intelligence_pkey PRIMARY KEY (id),
-  CONSTRAINT pricing_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT pricing_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.rag_chunks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
   source_url text,
   chunk_index integer NOT NULL,
   chunk_text text NOT NULL,
-  embedding vector(768),
+  embedding USER-DEFINED,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT rag_chunks_pkey PRIMARY KEY (id),
-  CONSTRAINT rag_chunks_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT rag_chunks_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.report_versions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -71,9 +66,8 @@ CREATE TABLE public.report_versions (
   model_version text,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT report_versions_pkey PRIMARY KEY (id),
-  CONSTRAINT report_versions_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT report_versions_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.social_sentiment (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -86,9 +80,8 @@ CREATE TABLE public.social_sentiment (
   sample_posts jsonb,
   analyzed_at timestamp with time zone DEFAULT now(),
   CONSTRAINT social_sentiment_pkey PRIMARY KEY (id),
-  CONSTRAINT social_sentiment_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT social_sentiment_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.traffic_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -96,25 +89,23 @@ CREATE TABLE public.traffic_intelligence (
   traffic_data jsonb,
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT traffic_intelligence_pkey PRIMARY KEY (id),
-  CONSTRAINT traffic_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id) ON DELETE CASCADE
+  CONSTRAINT traffic_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
-
 CREATE TABLE public.user_settings (
   user_id uuid NOT NULL,
   webhook_url text,
   webhook_secret text,
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT user_settings_pkey PRIMARY KEY (user_id),
-  CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+  CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE public.validations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   idea_description text NOT NULL,
   target_market text,
   budget_constraints text,
-  status validation_status NOT NULL DEFAULT 'pending'::validation_status,
+  status USER-DEFINED NOT NULL DEFAULT 'pending'::validation_status,
   idempotency_key text NOT NULL,
   idea_hash text NOT NULL,
   processing_started_at timestamp with time zone,
@@ -126,7 +117,7 @@ CREATE TABLE public.validations (
   report_json jsonb,
   markdown_report text,
   error_message text,
-  idea_embedding vector(768),
+  idea_embedding USER-DEFINED,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   deleted_at timestamp with time zone,
@@ -141,9 +132,8 @@ CREATE TABLE public.validations (
   jobs_data jsonb,
   traffic_data jsonb,
   CONSTRAINT validations_pkey PRIMARY KEY (id),
-  CONSTRAINT validations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+  CONSTRAINT validations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE public.workspace_members (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL,
@@ -152,30 +142,14 @@ CREATE TABLE public.workspace_members (
   role text NOT NULL DEFAULT 'viewer'::text,
   invited_at timestamp with time zone DEFAULT now(),
   CONSTRAINT workspace_members_pkey PRIMARY KEY (id),
-  CONSTRAINT workspace_members_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE,
-  CONSTRAINT workspace_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+  CONSTRAINT workspace_members_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id),
+  CONSTRAINT workspace_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
 CREATE TABLE public.workspaces (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
   created_by uuid NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT workspaces_pkey PRIMARY KEY (id),
-  CONSTRAINT workspaces_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE CASCADE
+  CONSTRAINT workspaces_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-
--- ==========================================
--- PERFORMANCE INDEXES (Foreign Keys)
--- ==========================================
-CREATE INDEX IF NOT EXISTS idx_funding_validation_id ON public.funding_intelligence(validation_id);
-CREATE INDEX IF NOT EXISTS idx_pricing_validation_id ON public.pricing_intelligence(validation_id);
-CREATE INDEX IF NOT EXISTS idx_rag_chunks_validation_id ON public.rag_chunks(validation_id);
-CREATE INDEX IF NOT EXISTS idx_report_versions_validation_id ON public.report_versions(validation_id);
-CREATE INDEX IF NOT EXISTS idx_social_sentiment_validation_id ON public.social_sentiment(validation_id);
-CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace_id ON public.workspace_members(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_workspace_members_user_id ON public.workspace_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_workspaces_created_by ON public.workspaces(created_by);
-CREATE INDEX IF NOT EXISTS idx_patent_validation_id ON public.patent_intelligence(validation_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_validation_id ON public.jobs_intelligence(validation_id);
-CREATE INDEX IF NOT EXISTS idx_traffic_validation_id ON public.traffic_intelligence(validation_id);
