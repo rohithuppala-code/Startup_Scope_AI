@@ -1,6 +1,39 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.channels (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  hub_id uuid,
+  name text NOT NULL,
+  channel_type text DEFAULT 'text'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  kind text NOT NULL DEFAULT 'text'::text,
+  description text,
+  CONSTRAINT channels_pkey PRIMARY KEY (id),
+  CONSTRAINT channels_hub_id_fkey FOREIGN KEY (hub_id) REFERENCES public.hubs(id)
+);
+CREATE TABLE public.comments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  post_id uuid,
+  user_id uuid,
+  content text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  is_hidden boolean NOT NULL DEFAULT false,
+  upvote_count integer NOT NULL DEFAULT 0,
+  author_id uuid,
+  CONSTRAINT comments_pkey PRIMARY KEY (id),
+  CONSTRAINT comments_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id),
+  CONSTRAINT comments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT comments_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.follows (
+  follower_id uuid NOT NULL,
+  following_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT follows_pkey PRIMARY KEY (follower_id, following_id),
+  CONSTRAINT follows_follower_id_fkey FOREIGN KEY (follower_id) REFERENCES public.profiles(id),
+  CONSTRAINT follows_following_id_fkey FOREIGN KEY (following_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.funding_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -13,6 +46,25 @@ CREATE TABLE public.funding_intelligence (
   CONSTRAINT funding_intelligence_pkey PRIMARY KEY (id),
   CONSTRAINT funding_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
+CREATE TABLE public.hub_members (
+  hub_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  joined_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hub_members_pkey PRIMARY KEY (hub_id, user_id),
+  CONSTRAINT hub_members_hub_id_fkey FOREIGN KEY (hub_id) REFERENCES public.hubs(id),
+  CONSTRAINT hub_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.hubs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  icon_url text,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  member_count integer NOT NULL DEFAULT 0,
+  CONSTRAINT hubs_pkey PRIMARY KEY (id),
+  CONSTRAINT hubs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.jobs_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -22,6 +74,17 @@ CREATE TABLE public.jobs_intelligence (
   CONSTRAINT jobs_intelligence_pkey PRIMARY KEY (id),
   CONSTRAINT jobs_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
 );
+CREATE TABLE public.messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  channel_id uuid,
+  user_id uuid,
+  content text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  is_hidden boolean NOT NULL DEFAULT false,
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.channels(id),
+  CONSTRAINT messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.patent_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   validation_id uuid NOT NULL,
@@ -30,6 +93,55 @@ CREATE TABLE public.patent_intelligence (
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT patent_intelligence_pkey PRIMARY KEY (id),
   CONSTRAINT patent_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
+);
+CREATE TABLE public.poll_votes (
+  poll_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  option_id text NOT NULL,
+  voted_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT poll_votes_pkey PRIMARY KEY (poll_id, user_id),
+  CONSTRAINT poll_votes_poll_id_fkey FOREIGN KEY (poll_id) REFERENCES public.polls(id),
+  CONSTRAINT poll_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.polls (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  post_id uuid NOT NULL,
+  question text NOT NULL,
+  options jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone,
+  CONSTRAINT polls_pkey PRIMARY KEY (id),
+  CONSTRAINT polls_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id)
+);
+CREATE TABLE public.post_votes (
+  post_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  direction smallint NOT NULL CHECK (direction = ANY (ARRAY[1, '-1'::integer])),
+  voted_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT post_votes_pkey PRIMARY KEY (post_id, user_id),
+  CONSTRAINT post_votes_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id),
+  CONSTRAINT post_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.posts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  validation_id uuid,
+  content text NOT NULL,
+  upvotes integer DEFAULT 0,
+  downvotes integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  title text,
+  author_id uuid,
+  report_json jsonb,
+  tags ARRAY NOT NULL DEFAULT '{}'::text[],
+  upvote_count integer NOT NULL DEFAULT 0,
+  downvote_count integer NOT NULL DEFAULT 0,
+  comment_count integer NOT NULL DEFAULT 0,
+  is_hidden boolean NOT NULL DEFAULT false,
+  CONSTRAINT posts_pkey PRIMARY KEY (id),
+  CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT posts_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id),
+  CONSTRAINT posts_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.pricing_intelligence (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -41,6 +153,23 @@ CREATE TABLE public.pricing_intelligence (
   scraped_at timestamp with time zone DEFAULT now(),
   CONSTRAINT pricing_intelligence_pkey PRIMARY KEY (id),
   CONSTRAINT pricing_intelligence_validation_id_fkey FOREIGN KEY (validation_id) REFERENCES public.validations(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  username text NOT NULL UNIQUE,
+  full_name text,
+  avatar_url text,
+  bio text,
+  karma_score integer DEFAULT 0,
+  badges jsonb DEFAULT '[]'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  display_name text,
+  twitter_url text,
+  linkedin_url text,
+  github_url text,
+  website_url text,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.rag_chunks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

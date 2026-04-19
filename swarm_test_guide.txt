@@ -1,0 +1,14 @@
+cd /Users/likhith./Startup_Scope_AI
+
+# Server (if not running)
+source backend/venv/bin/activate
+PYTHONPATH=/Users/likhith./Startup_Scope_AI:/Users/likhith./Startup_Scope_AI/backend \
+  uvicorn backend/app/main:app --host 127.0.0.1 --port 8000 &
+
+# Celery worker (required for test_13 AI moderation)
+PYTHONPATH=/Users/likhith./Startup_Scope_AI:/Users/likhith./Startup_Scope_AI/backend \
+  celery -A realtime_groups.backend.workers.celery_tasks worker -Q social --concurrency=2 &
+
+# Run all 20 tests
+PYTHONPATH=/Users/likhith./Startup_Scope_AI:/Users/likhith./Startup_Scope_AI/backend \
+  python -m pytest realtime_groups/backend/tests/test_multiplayer_swarm.py -v -s

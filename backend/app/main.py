@@ -17,7 +17,10 @@ from app.api.ws_router import router as ws_router
 from app.api.chat_router import router as chat_router
 from app.api.export_router import router as export_router
 from app.api.comparison_router import router as comparison_router
-from app.api.workspace_router import router as workspace_router
+
+# Discord for Founders — Social Pillar
+from realtime_groups.backend.social_app import include_social_routers
+
 from app.core.config import settings
 from app.schemas.validation import ValidationRequest, ValidationResponse
 from app.websockets.manager import manager
@@ -28,13 +31,15 @@ from app.websockets.redis_listener import listen_to_redis
 # ---------------------------------------------------------------------------
 from celery import Celery
 
+import os
+
 celery_app = Celery(
     "startupscope_producer",
-    broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND,
+    broker="memory://" if os.environ.get("CELERY_TASK_ALWAYS_EAGER", "0") == "1" else settings.CELERY_BROKER_URL,
+    backend=None if os.environ.get("CELERY_TASK_ALWAYS_EAGER", "0") == "1" else settings.CELERY_RESULT_BACKEND,
 )
 celery_app.conf.update(
-    task_always_eager=False,
+    task_always_eager=os.environ.get("CELERY_TASK_ALWAYS_EAGER", "0") == "1",
     broker_connection_retry_on_startup=True,
     # ── Queue declarations MUST match the worker's config ─────────────
     # The worker declares the 'default' queue with x-dead-letter-exchange
@@ -53,6 +58,8 @@ celery_app.conf.update(
         },
     },
 )
+
+import app.worker.celery_tasks # Ensure tasks are registered for eager mode
 
 # ---------------------------------------------------------------------------
 # Lifespan: start/stop the Redis Pub/Sub listener
@@ -76,8 +83,11 @@ app.include_router(ws_router)
 app.include_router(auth_router)
 app.include_router(chat_router)          # Feature 12: Conversational RAG
 app.include_router(export_router)        # Feature 13: PDF Export
-app.include_router(workspace_router)     # Feature 14: Team Collaboration
+
 app.include_router(comparison_router)    # Feature 15: Idea Comparison Engine
+
+# Phase 1-3: Discord for Founders — Identity Graph, Arena, Community, AI Moderation
+include_social_routers(app)
 
 # Service-role client bypasses Row Level Security — never expose to the frontend.
 supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
@@ -167,8 +177,7 @@ async def create_validation(
         await loop.run_in_executor(
             None,
             partial(
-                celery_app.send_task,
-                "app.worker.celery_tasks.process_validation",
+                app.worker.celery_tasks.process_validation.apply_async,
                 kwargs={
                     "validation_id": validation_id,
                     "idea_hash": idea_hash,
@@ -177,6 +186,9 @@ async def create_validation(
             ),
         )
     except Exception as dispatch_err:
+        print(f"[Validation] Dispatch error: {dispatch_err}", flush=True)
+        import traceback
+        traceback.print_exc()
         # Best-effort: mark the row failed so it doesn't stay stuck in 'pending'.
         try:
             await loop.run_in_executor(
