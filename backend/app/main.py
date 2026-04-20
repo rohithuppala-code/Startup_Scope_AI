@@ -5,10 +5,10 @@ import uuid
 import asyncio
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import redis as sync_redis
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, Query
 from supabase import create_client, Client
 
 from app.api.auth import router as auth_router
@@ -59,7 +59,7 @@ celery_app.conf.update(
     },
 )
 
-import app.worker.celery_tasks # Ensure tasks are registered for eager mode
+from app.worker.celery_tasks import process_validation as _process_validation_task
 
 # ---------------------------------------------------------------------------
 # Lifespan: start/stop the Redis Pub/Sub listener
@@ -79,6 +79,16 @@ async def lifespan(app: FastAPI):
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(title="StartupScope AI", version="1.0.0", lifespan=lifespan)
+
+# ── CORS — allow all origins (dev mode) ────────────────────────────────
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(ws_router)
 app.include_router(auth_router)
 app.include_router(chat_router)          # Feature 12: Conversational RAG
@@ -177,7 +187,7 @@ async def create_validation(
         await loop.run_in_executor(
             None,
             partial(
-                app.worker.celery_tasks.process_validation.apply_async,
+                _process_validation_task.apply_async,
                 kwargs={
                     "validation_id": validation_id,
                     "idea_hash": idea_hash,
@@ -215,6 +225,34 @@ async def create_validation(
         message="Validation task accepted and queued successfully.",
     )
 
+
+@app.get("/api/v1/validations")
+async def list_validations(
+    x_user_id: str = Depends(rate_limit_user),
+    status_filter: Optional[str] = Query(None, alias="status")
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves all validations for the current user.
+    Used for the "Compare Ideas" history selection modal.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        query = supabase.table("validations").select(
+            "id, idea_description, status, created_at, report_json, consensus_confidence"
+        ).eq("user_id", x_user_id)
+        
+        if status_filter:
+            query = query.eq("status", status_filter)
+            
+        query = query.order("created_at", desc=True)
+            
+        db_response = await loop.run_in_executor(None, lambda: query.execute())
+        return db_response.data or []
+    except Exception as db_err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {db_err}",
+        )
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/validate/{validation_id}  — Cache-Aside read path

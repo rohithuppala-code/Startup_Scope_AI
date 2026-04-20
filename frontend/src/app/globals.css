@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+:root {
+  /* ─── Dark Premium Palette ─── */
+  --bg-primary: #09090b;
+  --bg-secondary: #111113;
+  --bg-card: rgba(17, 17, 19, 0.6);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-glow: rgba(139, 92, 246, 0.3);
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent-violet: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+  --accent-amber: #f59e0b;
+  --glow-violet: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 60px rgba(139, 92, 246, 0.05);
+  --glow-cyan: 0 0 20px rgba(6, 182, 212, 0.15), 0 0 60px rgba(6, 182, 212, 0.05);
+}
+
+/* ─── Base ─── */
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+/* ─── Glass Card ─── */
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+}
+
+.glass-card-hover {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card-hover:hover {
+  border-color: var(--border-glow);
+  box-shadow: var(--glow-violet);
+  transform: translateY(-2px);
+}
+
+/* ─── Glowing Border Animation ─── */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: var(--glow-violet); }
+  50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.25), 0 0 80px rgba(139, 92, 246, 0.1); }
+}
+
+.glow-border {
+  border: 1px solid var(--border-glow);
+  box-shadow: var(--glow-violet);
+}
+
+.glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* ─── Gradient Text ─── */
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent-violet) 0%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(135deg, var(--accent-amber) 0%, var(--accent-rose) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Button Styles ─── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-violet) 0%, #7c3aed 100%);
+  color: white;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-ghost:hover {
+  color: var(--text-primary);
+  border-color: var(--border-glow);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+/* ─── Input ─── */
+.input-dark {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+.input-dark::placeholder {
+  color: var(--text-muted);
+}
+.input-dark:focus {
+  border-color: var(--accent-violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+/* ─── Animated gradient border (for Nexus cards) ─── */
+@keyframes border-rotate {
+  0% { --angle: 0deg; }
+  100% { --angle: 360deg; }
+}
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.animated-border {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.animated-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--angle),
+    transparent 25%,
+    var(--accent-violet) 50%,
+    var(--accent-cyan) 75%,
+    transparent 100%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  animation: border-rotate 4s linear infinite;
+  pointer-events: none;
+}

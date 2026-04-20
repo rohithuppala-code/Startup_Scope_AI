@@ -1,0 +1,86 @@
+# Walkthrough: Rigorous Endpoint Testing & Bug Fixes
+
+## Summary
+Rigorously tested **all 15 endpoints** in `realtime_groups` against **real Supabase** with real users. Found and fixed **7 bugs** across 4 router files + 2 test files. Created a 30-test live integration suite — **all 30 pass**.
+
+## Bugs Found & Fixed
+
+### 1. `conftest.py` — Wrong path calculation (ROOT CAUSE of all previous test failures)
+`Path(__file__).parents[4]` → fixed to `parents[3]`. This was why all 10 existing tests failed with `ModuleNotFoundError`.
+
+### 2. `arena_router.py` — 3 unhandled `.single()` exceptions
+Supabase's `.single()` **throws an exception** when 0 rows match (PostgREST behavior). The code checked `if not resp.data` but never reached it because the exception propagated as a bare `500 Internal Server Error`.
+
+**Fixed in 3 places:**
+- `publish_idea` — validation lookup + post insert
+- `get_post` — post detail lookup  
+- `vote_on_poll` — poll lookup
+- `vote_on_post` — author lookup for karma reward
+
+### 3. `community_router.py` — Unhandled `.single()` in `get_hub`
+Same `.single()` crash pattern. Now returns proper `404`.
+
+### 4. `profile_router.py` — `get_profile` returned 500 instead of 404
+The exception handler re-raised as `500_INTERNAL_SERVER_ERROR`. Changed to `404_NOT_FOUND`.
+
+### 5. `test_god_mode_e2e.py` — 3 payload/URL bugs
+- Poll votes sent `{"option_index": 0}` instead of `{"poll_id": "...", "option_id": "..."}`
+- Synthesis URL was `/api/v1/synthesis/threads/{id}` instead of `/api/v1/arena/posts/{id}/synthesize`
+- Response assertion checked `"insights"` instead of `"summary"`
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| [conftest.py](file:///Users/likhith./Startup_Scope_AI/realtime_groups/backend/tests/conftest.py) | Fixed `parents[4]` → `parents[3]` |
+| [arena_router.py](file:///Users/likhith./Startup_Scope_AI/realtime_groups/backend/api/arena_router.py) | Added try/except around 4 `.single()` calls |
+| [community_router.py](file:///Users/likhith./Startup_Scope_AI/realtime_groups/backend/api/community_router.py) | Added try/except around `get_hub` `.single()` |
+| [profile_router.py](file:///Users/likhith./Startup_Scope_AI/realtime_groups/backend/api/profile_router.py) | Changed 500 → 404 for missing profiles |
+| [test_god_mode_e2e.py](file:///Users/likhith./Startup_Scope_AI/realtime_groups/backend/tests/test_god_mode_e2e.py) | Fixed poll payloads + synthesis URL + assertion |
+| [test_live_endpoints.py](file:///Users/likhith./Startup_Scope_AI/realtime_groups/backend/tests/test_live_endpoints.py) | **NEW** — 30 live integration tests |
+
+## Test Results: 30/30 PASSED ✅
+
+```
+tests/test_live_endpoints.py::TestP1_Profiles::test_01_put_profile        ✅
+tests/test_live_endpoints.py::TestP1_Profiles::test_02_put_profile_empty  ✅
+tests/test_live_endpoints.py::TestP1_Profiles::test_03_get_profile        ✅
+tests/test_live_endpoints.py::TestP1_Profiles::test_04_get_validations    ✅
+tests/test_live_endpoints.py::TestP2_Community::test_05_list_hubs         ✅
+tests/test_live_endpoints.py::TestP2_Community::test_06_get_hub           ✅
+tests/test_live_endpoints.py::TestP2_Community::test_07_list_channels     ✅
+tests/test_live_endpoints.py::TestP2_Community::test_08_join_hub          ✅
+tests/test_live_endpoints.py::TestP2_Community::test_09_join_idempotent   ✅
+tests/test_live_endpoints.py::TestP2_Community::test_10_dm_init           ✅
+tests/test_live_endpoints.py::TestP2_Community::test_11_dm_self_400       ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_12_publish               ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_13_publish_dup_409       ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_14_list_posts            ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_15_post_detail           ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_16_upvote                ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_17_downvote              ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_18_double_vote_409       ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_19_poll_vote             ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_20_poll_double_409       ✅
+tests/test_live_endpoints.py::TestP3_Arena::test_21_poll_bad_option_400   ✅
+tests/test_live_endpoints.py::TestP4_Webhooks::test_22_webhook_accepted   ✅
+tests/test_live_endpoints.py::TestP4_Webhooks::test_23_webhook_ignored    ✅
+tests/test_live_endpoints.py::TestP4_Webhooks::test_24_webhook_skipped    ✅
+tests/test_live_endpoints.py::TestP4_Webhooks::test_25_synthesis          ✅
+tests/test_live_endpoints.py::TestP5_DBTruth::test_26_karma              ✅
+tests/test_live_endpoints.py::TestP5_DBTruth::test_27_vote_counts        ✅
+tests/test_live_endpoints.py::TestP5_DBTruth::test_28_hub_members        ✅
+tests/test_live_endpoints.py::TestP5_DBTruth::test_29_poll_votes         ✅
+tests/test_live_endpoints.py::TestP6_Cleanup::test_99_cleanup            ✅
+
+============================= 30 passed in 38.50s =============================
+```
+
+Key validations confirmed against real DB:
+- **karma=8** (publish reward 3 + upvote reward 5)
+- **badges=['first_post']** auto-awarded
+- **hub_members=3** exact count
+- **poll_votes=1** with double-vote blocking
+- **vote counts synced** (up=1, down=1)
+- **Gemini synthesis** returned structured brief with 2 comments
+- **All cleanup** completed — zero test artifacts left in DB
