@@ -1,186 +1,301 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Zap,
+  BarChart3,
+  Loader2,
+  Sparkles,
+  TrendingUp,
+  Filter,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/stores/user-store";
-import {
-  ArrowBigUp,
-  ArrowBigDown,
-  MessageSquare,
-  Tag,
-  Sparkles,
-  BarChart3,
-} from "lucide-react";
-
-interface Post {
-  id: string;
-  title: string;
-  author_username: string;
-  karma_score: number;
-  upvote_count: number;
-  downvote_count: number;
-  comment_count: number;
-  tags: string[];
-  created_at: string;
-}
+import { useArenaFeed } from "@/hooks/use-arena-feed";
+import LiveIdeaCard from "./components/LiveIdeaCard";
 
 export default function ArenaFeedPage() {
   const userId = useUserStore((s) => s.userId);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { posts, loading, hasMore, loadMore, refreshFeed, prependPost } = useArenaFeed();
+  const [composerText, setComposerText] = useState("");
+  const [composerTags, setComposerTags] = useState("");
+  const [composerTitle, setComposerTitle] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
+  const [sortBy, setSortBy] = useState<"recent" | "top">("recent");
+  const observerRef = useRef<HTMLDivElement>(null);
 
+  // Initial load
   useEffect(() => {
-    api<Post[]>("/api/v1/arena/posts?page=1&page_size=30")
-      .then(setPosts)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    loadMore();
+  }, [loadMore]);
 
-  const vote = async (postId: string, direction: 1 | -1) => {
-    if (!userId) return;
-    try {
-      const res = await api<{ new_score: number }>(
-        `/api/v1/arena/posts/${postId}/vote`,
-        { method: "POST", userId, body: { direction } }
-      );
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? {
-                ...p,
-                karma_score: res.new_score,
-                upvote_count:
-                  direction === 1 ? p.upvote_count + 1 : p.upvote_count,
-                downvote_count:
-                  direction === -1 ? p.downvote_count + 1 : p.downvote_count,
-              }
-            : p
-        )
-      );
-    } catch (err) {
-      console.error("Vote error:", err);
-    }
-  };
+  // Use refs to avoid recreating the observer
+  const hasMoreRef = useRef(hasMore);
+  const loadingRef = useRef(loading);
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="glass-card p-6 animate-pulse">
-            <div className="h-5 w-64 bg-white/5 rounded mb-3" />
-            <div className="h-3 w-40 bg-white/5 rounded mb-2" />
-            <div className="h-3 w-full bg-white/5 rounded" />
-          </div>
-        ))}
-      </div>
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!observerRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreRef.current && !loadingRef.current) {
+          loadMore();
+        }
+      },
+      { rootMargin: "200px" }
     );
-  }
+    observer.observe(observerRef.current);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  const handleSubmitIdea = useCallback(async () => {
+    if (!composerText.trim() || !userId || isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      // Step 1: Submit to validation pipeline
+      const valRes = await api<{ validation_id: string; status: string }>(
+        "/api/v1/validate",
+        {
+          method: "POST",
+          userId,
+          body: {
+            idea_description: composerText.trim(),
+            target_market: null,
+            budget_constraints: null,
+          },
+        }
+      );
+
+      // Step 2: Publish to Arena as a post immediately (it will be live-updated)
+      const title = composerTitle.trim() || composerText.trim().slice(0, 80);
+      const tags = composerTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      // Add a streaming card to the feed while validation runs
+      prependPost({
+        id: `temp-${valRes.validation_id}`,
+        title: title,
+        content: composerText.trim(),
+        author_id: userId,
+        author_username: "You",
+        karma_score: 0,
+        upvote_count: 0,
+        downvote_count: 0,
+        comment_count: 0,
+        tags: tags,
+        created_at: new Date().toISOString(),
+        validation_id: valRes.validation_id,
+        report_json: null,
+      });
+
+      // Reset composer
+      setComposerText("");
+      setComposerTitle("");
+      setComposerTags("");
+      setShowComposer(false);
+    } catch (err) {
+      console.error("[ArenaFeed] Submit error:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [composerText, composerTitle, composerTags, userId, isSubmitting, prependPost]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* ─── Header ─── */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">Validation Arena</h1>
-          <p className="text-sm text-[var(--text-secondary)]">
+          <h1 className="text-2xl font-bold gradient-text">Global Feed</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-0.5">
             Battle-test ideas with the community
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-          <BarChart3 className="w-4 h-4" />
-          {posts.length} posts
+        <div className="flex items-center gap-2">
+          <div className="tab-bar">
+            <button
+              onClick={() => setSortBy("recent")}
+              className={`tab-item ${sortBy === "recent" ? "tab-item-active" : ""}`}
+            >
+              <TrendingUp className="w-3 h-3 inline mr-1" />
+              Recent
+            </button>
+            <button
+              onClick={() => setSortBy("top")}
+              className={`tab-item ${sortBy === "top" ? "tab-item-active" : ""}`}
+            >
+              <Filter className="w-3 h-3 inline mr-1" />
+              Top
+            </button>
+          </div>
         </div>
       </div>
 
-      <AnimatePresence mode="popLayout">
-        {posts.map((post, i) => (
-          <motion.div
-            key={post.id}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            className="glass-card glass-card-hover p-5 mb-4"
+      {/* ─── Composer ─── */}
+      <motion.div
+        className="composer p-4 mb-6"
+        layout
+      >
+        {!showComposer ? (
+          <button
+            onClick={() => setShowComposer(true)}
+            className="w-full text-left text-[var(--text-muted)] text-sm hover:text-[var(--text-secondary)] transition-colors py-1"
           >
-            <div className="flex gap-4">
-              {/* Vote Column */}
-              <div className="flex flex-col items-center gap-0.5 shrink-0">
-                <button
-                  onClick={() => vote(post.id, 1)}
-                  className="p-1.5 rounded-lg hover:bg-emerald-500/10 transition-colors group"
-                >
-                  <ArrowBigUp className="w-5 h-5 text-[var(--text-muted)] group-hover:text-emerald-400 transition-colors" />
-                </button>
-                <span
-                  className={`text-sm font-bold tabular-nums ${
-                    post.karma_score > 0
-                      ? "text-emerald-400"
-                      : post.karma_score < 0
-                      ? "text-rose-400"
-                      : "text-[var(--text-muted)]"
-                  }`}
-                >
-                  {post.karma_score}
-                </span>
-                <button
-                  onClick={() => vote(post.id, -1)}
-                  className="p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors group"
-                >
-                  <ArrowBigDown className="w-5 h-5 text-[var(--text-muted)] group-hover:text-rose-400 transition-colors" />
+            💡 What are you building? Share an idea for AI validation...
+          </button>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="space-y-3"
+          >
+            {/* Title */}
+            <input
+              type="text"
+              value={composerTitle}
+              onChange={(e) => setComposerTitle(e.target.value)}
+              placeholder="Give your idea a title..."
+              className="w-full bg-transparent text-lg font-semibold text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+            />
+
+            {/* Description */}
+            <textarea
+              value={composerText}
+              onChange={(e) => setComposerText(e.target.value)}
+              placeholder="Describe your startup idea in detail. Our AI will analyze competitors, pricing, market sentiment, and more..."
+              rows={4}
+              className="w-full bg-transparent text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-muted)] outline-none resize-none"
+              autoFocus
+            />
+
+            {/* Tags */}
+            <input
+              type="text"
+              value={composerTags}
+              onChange={(e) => setComposerTags(e.target.value)}
+              placeholder="Tags (comma separated): SaaS, B2B, AI..."
+              className="w-full bg-transparent text-xs text-[var(--text-muted)] placeholder:text-[var(--text-muted)]/50 outline-none"
+            />
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <button className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5">
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  Attach Poll
                 </button>
               </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-base mb-1 text-[var(--text-primary)]">
-                  {post.title}
-                </h3>
-                <p className="text-xs text-[var(--text-muted)] mb-3">
-                  by{" "}
-                  <span className="text-[var(--accent-violet)] font-medium">
-                    @{post.author_username}
-                  </span>{" "}
-                  · {new Date(post.created_at).toLocaleDateString()}
-                </p>
-
-                {/* Tags */}
-                {(post.tags || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {post.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/10"
-                      >
-                        <Tag className="w-3 h-3" />
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Footer */}
-                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    {post.comment_count} comments
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    AI Synthesis
-                  </span>
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowComposer(false)}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors px-3 py-1.5"
+                >
+                  Cancel
+                </button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSubmitIdea}
+                  disabled={!composerText.trim() || isSubmitting}
+                  className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      Run AI Validation
+                    </>
+                  )}
+                </motion.button>
               </div>
             </div>
           </motion.div>
-        ))}
-      </AnimatePresence>
+        )}
+      </motion.div>
 
-      {posts.length === 0 && (
-        <div className="text-center py-20">
-          <Sparkles className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
-          <p className="text-[var(--text-secondary)]">
-            No ideas in the Arena yet. Be the first to publish!
-          </p>
-        </div>
-      )}
+      {/* ─── Feed ─── */}
+      <div className="space-y-4">
+        <AnimatePresence mode="popLayout">
+          {posts.map((post, i) => {
+            // Detect if this is a live streaming card
+            const isStreaming = post.id.startsWith("temp-");
+
+            return (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i < 5 ? i * 0.04 : 0 }}
+              >
+                <LiveIdeaCard
+                  postId={isStreaming ? undefined : post.id}
+                  title={post.title}
+                  content={post.content}
+                  authorId={post.author_id}
+                  authorUsername={post.author_username}
+                  upvoteCount={post.upvote_count}
+                  downvoteCount={post.downvote_count}
+                  commentCount={post.comment_count}
+                  tags={post.tags}
+                  createdAt={post.created_at}
+                  reportJson={post.report_json}
+                  validationId={post.validation_id}
+                  karmaScore={post.karma_score}
+                  initialPhase={isStreaming ? "streaming" : "interactive"}
+                  ideaDescription={post.content}
+                  onPhaseChange={(phase) => {
+                    if (phase === "completed" && isStreaming && userId) {
+                      api("/api/v1/arena/publish", {
+                        method: "POST",
+                        userId,
+                        body: {
+                          validation_id: post.validation_id,
+                          title: post.title || "Startup Idea",
+                          tags: post.tags,
+                        },
+                      }).catch(console.error);
+                    }
+                  }}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+
+        {/* Loading more */}
+        {loading && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 text-[var(--accent-violet)] animate-spin" />
+          </div>
+        )}
+
+        {/* Infinite scroll trigger */}
+        <div ref={observerRef} className="h-px" />
+
+        {/* Empty state */}
+        {!loading && posts.length === 0 && (
+          <div className="text-center py-20">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-4 border border-[var(--border-subtle)]">
+              <Sparkles className="w-8 h-8 text-[var(--text-muted)]" />
+            </div>
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+              The Arena awaits
+            </h3>
+            <p className="text-sm text-[var(--text-secondary)] max-w-xs mx-auto">
+              Be the first to share an idea and get it validated by our AI pipeline.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

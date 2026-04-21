@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,6 +21,7 @@ import {
   Users,
   Lightbulb,
   X,
+  MessageCircle,
 } from "lucide-react";
 
 import { CompareModal } from "./CompareModal";
@@ -69,6 +71,12 @@ export default function StudioPage() {
   const [showCompareSelect, setShowCompareSelect] = useState(false);
   const [comparisonReport, setComparisonReport] = useState<any>(null);
   const [comparing, setComparing] = useState(false);
+
+  // RAG Chatbot State
+  const [showRagChat, setShowRagChat] = useState(false);
+  const [ragMessages, setRagMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [ragInput, setRagInput] = useState("");
+  const [ragLoading, setRagLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!idea.trim() || !userId) return;
@@ -145,6 +153,31 @@ export default function StudioPage() {
       alert("Failed to run comparison. Ensure all selected ideas are completed.");
     } finally {
       setComparing(false);
+    }
+  };
+
+  const handleRagSend = async () => {
+    if (!ragInput.trim() || !validationId || ragLoading) return;
+    const question = ragInput.trim();
+    setRagMessages((prev) => [...prev, { role: "user", content: question }]);
+    setRagInput("");
+    setRagLoading(true);
+    try {
+      const res = await api<{ answer: string; sources?: { text: string; source_url?: string }[] }>(
+        `/api/v1/chat/${validationId}`,
+        {
+          method: "POST",
+          body: {
+            question,
+            history: ragMessages.slice(-10),
+          },
+        }
+      );
+      setRagMessages((prev) => [...prev, { role: "assistant", content: res.answer }]);
+    } catch {
+      setRagMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I couldn't process your question. Please try again." }]);
+    } finally {
+      setRagLoading(false);
     }
   };
 
@@ -295,6 +328,13 @@ export default function StudioPage() {
                 Compare Ideas
               </button>
               <button
+                onClick={() => setShowRagChat(!showRagChat)}
+                className={`btn-ghost flex items-center gap-2 ${showRagChat ? "text-cyan-400 border-cyan-500/30" : ""}`}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Ask AI
+              </button>
+              <button
                 onClick={() => setShowPublish(true)}
                 className="btn-primary flex items-center gap-2"
               >
@@ -303,6 +343,94 @@ export default function StudioPage() {
               </button>
             </motion.div>
           )}
+
+          {/* RAG Chatbot Panel */}
+          <AnimatePresence>
+            {showRagChat && validationId && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden mt-4"
+              >
+                <div className="glass-card p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+                      <MessageCircle className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm">Ask Your Report</h3>
+                      <p className="text-[10px] text-[var(--text-muted)]">Ask follow-up questions grounded in your AI analysis</p>
+                    </div>
+                    <button onClick={() => setShowRagChat(false)} className="ml-auto p-1 rounded-lg hover:bg-white/5">
+                      <X className="w-4 h-4 text-[var(--text-muted)]" />
+                    </button>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto mb-4 scroll-smooth">
+                    {ragMessages.length === 0 && (
+                      <div className="text-center py-8">
+                        <Sparkles className="w-6 h-6 text-cyan-400/50 mx-auto mb-2" />
+                        <p className="text-xs text-[var(--text-muted)]">Ask anything about your validation report</p>
+                        <div className="flex flex-wrap gap-1.5 justify-center mt-3">
+                          {["What are the key risks?", "Who are my competitors?", "What's the market size?", "How should I price this?"].map((q) => (
+                            <button
+                              key={q}
+                              onClick={() => { setRagInput(q); }}
+                              className="text-[10px] px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors"
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {ragMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                          msg.role === "user"
+                            ? "bg-[var(--accent-violet)] text-white rounded-br-md"
+                            : "bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-bl-md"
+                        }`}>
+                          <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {ragLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl rounded-bl-md px-4 py-3">
+                          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Thinking...
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={ragInput}
+                      onChange={(e) => setRagInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleRagSend(); } }}
+                      placeholder="Ask a question about your report..."
+                      className="input-dark flex-1 py-2.5 text-sm"
+                    />
+                    <button
+                      onClick={handleRagSend}
+                      disabled={!ragInput.trim() || ragLoading}
+                      className={`btn-icon shrink-0 ${ragInput.trim() ? "bg-cyan-500 border-cyan-500 text-white" : ""}`}
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
 
@@ -410,11 +538,72 @@ function ReportSection({ section, index }: { section: WSSection; index: number }
         </div>
         <h3 className="font-semibold text-lg">{label}</h3>
       </div>
-      <div className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
-        {typeof section.data === "string"
-          ? section.data
-          : JSON.stringify(section.data, null, 2)}
+      <div className="text-sm text-[var(--text-secondary)] leading-relaxed space-y-3">
+        {typeof section.data === "string" ? (
+          <p className="whitespace-pre-wrap">{section.data}</p>
+        ) : (
+          <ReportDataRenderer data={section.data} />
+        )}
       </div>
     </motion.div>
+  );
+}
+
+/* ─── Smart Data Renderer ─── */
+function ReportDataRenderer({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data);
+
+  const formatKey = (key: string) =>
+    key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const renderValue = (value: unknown, depth = 0): React.ReactNode => {
+    if (value === null || value === undefined) return <span className="text-[var(--text-muted)]">N/A</span>;
+    if (typeof value === "boolean") return <span className={value ? "text-emerald-400" : "text-rose-400"}>{value ? "Yes" : "No"}</span>;
+    if (typeof value === "number") return <span className="text-[var(--accent-violet)] font-semibold tabular-nums">{value}</span>;
+    if (typeof value === "string") return <span className="whitespace-pre-wrap">{value}</span>;
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <span className="text-[var(--text-muted)]">None</span>;
+      // Array of strings → bullet list
+      if (value.every((v) => typeof v === "string")) {
+        return (
+          <ul className="list-disc list-inside space-y-0.5 ml-1">
+            {value.map((item, i) => (
+              <li key={i} className="text-[var(--text-secondary)]">{String(item)}</li>
+            ))}
+          </ul>
+        );
+      }
+      // Array of objects
+      return (
+        <div className="space-y-2 ml-2">
+          {value.map((item, i) => (
+            <div key={i} className="glass-card p-3 bg-white/[0.01]">
+              {typeof item === "object" && item !== null ? (
+                <ReportDataRenderer data={item as Record<string, unknown>} />
+              ) : (
+                <span>{String(item)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (typeof value === "object" && depth < 2) {
+      return <ReportDataRenderer data={value as Record<string, unknown>} />;
+    }
+    return <span className="whitespace-pre-wrap text-[var(--text-muted)]">{JSON.stringify(value, null, 2)}</span>;
+  };
+
+  return (
+    <div className="space-y-3">
+      {entries.map(([key, value]) => (
+        <div key={key}>
+          <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1">{formatKey(key)}</p>
+          <div className="text-sm text-[var(--text-secondary)]">{renderValue(value)}</div>
+        </div>
+      ))}
+    </div>
   );
 }

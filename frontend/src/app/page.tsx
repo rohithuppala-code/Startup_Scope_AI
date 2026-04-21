@@ -1,15 +1,33 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/user-store";
+import LoginPage from "./(auth)/login/page";
+import AuthLayout from "./(auth)/layout";
 
 export default function RootPage() {
   const router = useRouter();
   const isAuthenticated = useUserStore((s) => s.isAuthenticated);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    router.replace(isAuthenticated ? "/nexus" : "/login");
+    setMounted(true);
+    if (isAuthenticated) {
+      router.replace("/nexus");
+    }
   }, [isAuthenticated, router]);
 
-  return null;
+  // Prevent hydration mismatch
+  if (!mounted) return null;
+
+  if (isAuthenticated) {
+    return null;
+  }
+
+  // Render the login page exactly as it appears at /login
+  return (
+    <AuthLayout>
+      <LoginPage />
+    </AuthLayout>
+  );
 }

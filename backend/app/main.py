@@ -354,3 +354,151 @@ async def get_validation(
 
     record["source"] = "database"
     return record
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/validate/{validation_id}/status  — Public status check (no auth)
+# Used by group-chat members polling for AI validation results.
+# ---------------------------------------------------------------------------
+@app.get("/api/v1/validate/{validation_id}/status")
+async def get_validation_status(validation_id: str) -> Dict[str, Any]:
+    """Public read-only status endpoint — no user auth required.
+    Returns only: validation_id, status, report_json.
+    Suitable for group-chat members who are not the owner."""
+    try:
+        uuid.UUID(validation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="validation_id must be a valid UUID.")
+
+    loop = asyncio.get_running_loop()
+    cache_key = f"validation:result:{validation_id}"
+
+    # Try Redis cache first
+    try:
+        cached_raw = await loop.run_in_executor(None, lambda: _redis.get(cache_key))
+        if cached_raw:
+            cached = json.loads(cached_raw)
+            return {"validation_id": validation_id, "status": cached.get("status"), "report_json": cached.get("report_json")}
+    except Exception:
+        pass
+
+    # DB lookup (no user_id filter — public)
+    try:
+        db_resp = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("validations")
+                .select("id, status, report_json")
+                .eq("id", validation_id)
+                .single()
+                .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not db_resp.data:
+        raise HTTPException(status_code=404, detail="Validation not found.")
+
+    rec = db_resp.data
+    return {"validation_id": validation_id, "status": rec["status"], "report_json": rec.get("report_json")}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/validate/{validation_id}/summarize  — AI-generated Idea Summary
+# Uses Gemini to produce a rich summary from report_json + markdown_report.
+# ---------------------------------------------------------------------------
+@app.post("/api/v1/validate/{validation_id}/summarize")
+async def summarize_validation(validation_id: str) -> Dict[str, Any]:
+    """Generate a rich AI summary of the validation report using Gemini."""
+    try:
+        uuid.UUID(validation_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="validation_id must be a valid UUID.")
+
+    loop = asyncio.get_running_loop()
+
+    # Fetch report_json + markdown_report
+    try:
+        db_resp = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("validations")
+                .select("id, status, report_json, markdown_report, idea_description")
+                .eq("id", validation_id)
+                .single()
+                .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not db_resp.data:
+        raise HTTPException(status_code=404, detail="Validation not found.")
+
+    rec = db_resp.data
+    if rec["status"] != "completed":
+        raise HTTPException(status_code=400, detail=f"Validation not completed yet (status: {rec['status']})")
+
+    report_json = rec.get("report_json") or {}
+    markdown_report = rec.get("markdown_report") or ""
+    idea_desc = rec.get("idea_description") or ""
+
+    # Build context for Gemini
+    context_parts = []
+    if idea_desc:
+        context_parts.append(f"## Original Idea\n{idea_desc}")
+    if markdown_report:
+        context_parts.append(f"## Full Report\n{markdown_report[:4000]}")
+    if report_json:
+        context_parts.append(f"## Report Data\n```json\n{json.dumps(report_json, indent=2)[:3000]}\n```")
+
+    if not context_parts:
+        return {"summary": f"**Idea:** {idea_desc}\n\nNo detailed report available yet."}
+
+    context = "\n\n".join(context_parts)
+
+    prompt = (
+        "You are StartupScope AI. The user wants a clear, actionable summary of this startup idea validation report.\n\n"
+        "Based on the report data below, produce a well-structured summary that covers:\n"
+        "1. 💡 **The Idea** — What the startup is about (1-2 sentences)\n"
+        "2. 📊 **Feasibility Score** — The numerical score and what it means\n"
+        "3. 🌍 **Market Analysis** — Key market insights\n"
+        "4. ⚔️ **Competition** — Main competitors and positioning\n"
+        "5. ⚠️ **Key Risks** — Top risks identified\n"
+        "6. 🚀 **Recommendation** — What the founder should do next\n\n"
+        "Use emojis as section headers. Be concise but insightful. Use bullet points where appropriate.\n"
+        "Do NOT make up data — only use what's in the report.\n\n"
+        f"{context}"
+    )
+
+    try:
+        from app.services.ai_pipeline import _get_gemini
+        from google.genai import types as genai_types
+
+        client = _get_gemini()
+        response = await loop.run_in_executor(
+            None,
+            lambda: client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    temperature=0.5,
+                    max_output_tokens=1024,
+                ),
+            )
+        )
+        summary = response.text or "Summary generation failed."
+    except Exception as e:
+        print(f"[Summarize] Gemini error: {e}", flush=True)
+        # Fallback: return a structured summary from the JSON fields
+        lines = [f"**💡 Idea:** {idea_desc}"]
+        if isinstance(report_json, dict):
+            score = report_json.get("feasibility_score") or report_json.get("consensus_confidence")
+            if score:
+                lines.append(f"**📊 Feasibility:** {score}")
+            mv = report_json.get("market_viability")
+            if mv:
+                lines.append(f"**🌍 Market:** {str(mv)[:300]}")
+            rec_approach = report_json.get("recommended_approach")
+            if rec_approach:
+                lines.append(f"**🚀 Recommendation:** {str(rec_approach)[:300]}")
+        summary = "\n\n".join(lines)
+
+    return {"summary": summary, "validation_id": validation_id}

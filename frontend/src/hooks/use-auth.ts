@@ -1,16 +1,28 @@
 "use client";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/user-store";
 
 export function useAuth({ redirectTo = "/login" } = {}) {
-  const { isAuthenticated, userId, email, karma, badges, logout } =
+  const { isAuthenticated, userId, email, karma, badges, logout: storeLogout } =
     useUserStore();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) router.replace(redirectTo);
-  }, [isAuthenticated, redirectTo, router]);
+    setTimeout(() => setMounted(true), 0);
+  }, []);
 
-  return { isAuthenticated, userId, email, karma, badges, logout };
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
+      router.replace(redirectTo);
+    }
+  }, [mounted, isAuthenticated, redirectTo, router]);
+
+  const logout = useCallback(() => {
+    storeLogout();
+    router.replace("/login");
+  }, [storeLogout, router]);
+
+  return { isAuthenticated, userId, email, karma, badges, logout, isLoaded: mounted };
 }

@@ -96,7 +96,15 @@ def synthesize_thread(post_id: str) -> dict[str, Any]:
 
     # 5. Parse and return
     try:
-        synthesis = json.loads(raw_json)
+        clean_json = raw_json.strip()
+        if clean_json.startswith("```json"):
+            clean_json = clean_json[7:]
+        if clean_json.startswith("```"):
+            clean_json = clean_json[3:]
+        if clean_json.endswith("```"):
+            clean_json = clean_json[:-3]
+        clean_json = clean_json.strip()
+        synthesis = json.loads(clean_json)
     except json.JSONDecodeError as e:
         logger.error("[Synthesis] Malformed JSON from Gemini for post=%s: %s | raw=%s", post_id, e, raw_json[:200])
         raise RuntimeError("Synthesis AI returned malformed JSON.") from e

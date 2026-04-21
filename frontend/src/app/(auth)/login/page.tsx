@@ -3,25 +3,33 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore } from "@/stores/user-store";
-import { Zap, Loader2, AlertCircle } from "lucide-react";
+import { Zap, Loader2, AlertCircle, UserPlus, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const login = useUserStore((s) => s.login);
+  const register = useUserStore((s) => s.register);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
+      if (mode === "register") {
+        await register(email, password, username || undefined, fullName || undefined);
+      } else {
+        await login(email, password);
+      }
       router.push("/nexus");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : `${mode === "register" ? "Registration" : "Login"} failed`);
     } finally {
       setLoading(false);
     }
@@ -48,9 +56,13 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <h2 className="text-2xl font-bold mb-1 gradient-text">Welcome back</h2>
+        <h2 className="text-2xl font-bold mb-1 gradient-text">
+          {mode === "login" ? "Welcome back" : "Create account"}
+        </h2>
         <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Sign in to access The Studio & The Arena
+          {mode === "login"
+            ? "Sign in to access The Studio & The Arena"
+            : "Join the Compute-Driven Social Network"}
         </p>
 
         {error && (
@@ -65,6 +77,38 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Registration-only fields */}
+          {mode === "register" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="input-dark"
+                  placeholder="John Doe"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  className="input-dark"
+                  placeholder="johndoe"
+                  maxLength={28}
+                />
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Letters, numbers, underscores only</p>
+              </div>
+            </>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
               Email
@@ -89,6 +133,7 @@ export default function LoginPage() {
               className="input-dark"
               placeholder="••••••••"
               required
+              minLength={6}
             />
           </div>
           <button
@@ -98,11 +143,36 @@ export default function LoginPage() {
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : mode === "login" ? (
+              <>
+                <LogIn className="w-4 h-4" />
+                Sign In
+              </>
             ) : (
-              "Sign In"
+              <>
+                <UserPlus className="w-4 h-4" />
+                Create Account
+              </>
             )}
           </button>
         </form>
+
+        {/* Toggle between login and register */}
+        <div className="mt-6 pt-4 border-t border-[var(--border-subtle)] text-center">
+          <p className="text-sm text-[var(--text-secondary)]">
+            {mode === "login" ? "Don't have an account?" : "Already have an account?"}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setError("");
+              }}
+              className="ml-1.5 text-[var(--accent-violet)] font-medium hover:underline"
+            >
+              {mode === "login" ? "Sign up" : "Sign in"}
+            </button>
+          </p>
+        </div>
       </div>
     </motion.div>
   );

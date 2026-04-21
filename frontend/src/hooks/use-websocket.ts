@@ -13,19 +13,21 @@ interface UseWebSocketReturn {
   disconnect: () => void;
 }
 
-const WS_BASE =
-  (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000")
-    .replace("http://", "ws://")
-    .replace("https://", "wss://");
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export function useWebSocket(): UseWebSocketReturn {
   const [sections, setSections] = useState<WSSection[]>([]);
   const [status, setStatus] = useState<UseWebSocketReturn["status"]>("idle");
-  const wsRef = useRef<WebSocket | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const validationIdRef = useRef<string | null>(null);
+  const attemptRef = useRef(0);
 
   const disconnect = useCallback(() => {
-    wsRef.current?.close();
-    wsRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    validationIdRef.current = null;
   }, []);
 
   const connect = useCallback(
@@ -33,46 +35,57 @@ export function useWebSocket(): UseWebSocketReturn {
       disconnect();
       setSections([]);
       setStatus("connecting");
+      validationIdRef.current = validationId;
+      attemptRef.current = 0;
 
-      const ws = new WebSocket(`${WS_BASE}/ws/validation/${validationId}`);
-      wsRef.current = ws;
+      // Poll the validation status REST endpoint instead of using WebSocket
+      intervalRef.current = setInterval(async () => {
+        const vid = validationIdRef.current;
+        if (!vid) return;
 
-      ws.onopen = () => setStatus("streaming");
+        attemptRef.current += 1;
 
-      ws.onmessage = (event) => {
+        // Stop polling after 3 minutes (90 × 2s intervals)
+        if (attemptRef.current > 90) {
+          setStatus("failed");
+          disconnect();
+          return;
+        }
+
         try {
-          const msg = JSON.parse(event.data);
+          // The main backend's GET /api/v1/validate/{id} returns status + report_json.
+          // It requires x-user-id but for the group chat we won't know the creator's id,
+          // so we fetch WITHOUT it (use service-role-aware endpoint if available, else best-effort).
+          const res = await fetch(`${API_BASE}/api/v1/validate/${vid}/status`).catch(
+            () => fetch(`${API_BASE}/api/v1/validate/${vid}`)
+          );
+          if (!res.ok) return; // keep polling if not ready
 
-          if (msg.status === "completed") {
+          const data = await res.json() as {
+            status: string;
+            report_json?: Record<string, unknown>;
+            idea_description?: string;
+          };
+
+          if (data.status === "completed") {
             setStatus("completed");
-            // If the final message carries report data, add it
-            if (msg.section) {
-              setSections((prev) => [...prev, { section: msg.section, data: msg.data || msg }]);
+            if (data.report_json) {
+              setSections([{ section: "report", data: data.report_json }]);
             }
-            return;
-          }
-          if (msg.status === "failed") {
+            disconnect();
+          } else if (data.status === "failed") {
             setStatus("failed");
-            return;
-          }
-
-          // Progressive section update
-          if (msg.section) {
-            setSections((prev) => [...prev, { section: msg.section, data: msg.data || msg }]);
+            disconnect();
+          } else {
+            // Still processing — mark as streaming so the card shows the spinner
+            setStatus("streaming");
           }
         } catch {
-          // Non-JSON frame, ignore
+          // Network blip — keep polling
         }
-      };
-
-      ws.onerror = () => setStatus("failed");
-      ws.onclose = () => {
-        if (status !== "completed" && status !== "failed") {
-          setStatus((s) => (s === "streaming" ? "completed" : s));
-        }
-      };
+      }, 2000);
     },
-    [disconnect, status]
+    [disconnect]
   );
 
   useEffect(() => () => disconnect(), [disconnect]);

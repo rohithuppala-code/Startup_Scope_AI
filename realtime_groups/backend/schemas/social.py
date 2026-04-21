@@ -169,3 +169,131 @@ class SupabaseWebhookPayload(BaseModel):
     schema_name: str = Field(default="public", alias="schema")
     record: dict[str, Any] = Field(..., description="The new row data")
     old_record: Optional[dict[str, Any]] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Search & Trending
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SearchResultPost(BaseModel):
+    """A post result from search."""
+    id: uuid.UUID
+    title: Optional[str] = None
+    content: str
+    author_username: str = "unknown"
+    upvote_count: int = 0
+    downvote_count: int = 0
+    comment_count: int = 0
+    tags: list[str] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+
+
+class SearchResultProfile(BaseModel):
+    """A profile result from search."""
+    id: uuid.UUID
+    username: str
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    karma_score: int = 0
+    badges: list[str] = Field(default_factory=list)
+
+
+class TrendingPostResponse(BaseModel):
+    """Trending post for the right sidebar."""
+    id: uuid.UUID
+    title: Optional[str] = None
+    author_username: str = "unknown"
+    upvote_count: int = 0
+    comment_count: int = 0
+    created_at: Optional[datetime] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DM / Messages
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ConversationSummary(BaseModel):
+    """Summary of a DM conversation for the conversations list."""
+    channel_id: uuid.UUID
+    participant_id: uuid.UUID
+    participant_username: str = "unknown"
+    participant_avatar: Optional[str] = None
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+
+
+class SendMessageRequest(BaseModel):
+    """POST /api/v1/messages/{channel_id}/send"""
+    content: str = Field(..., min_length=1, max_length=4000)
+    validation_id: Optional[uuid.UUID] = Field(
+        None,
+        description="Optional — links this message to an AI validation for inline LiveIdeaCard rendering",
+    )
+
+
+class MessageResponse(BaseModel):
+    """A single message in a chat timeline."""
+    id: uuid.UUID
+    channel_id: uuid.UUID
+    user_id: uuid.UUID
+    content: str
+    validation_id: Optional[uuid.UUID] = None
+    is_hidden: bool = False
+    created_at: Optional[datetime] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Comments
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CommentCreateRequest(BaseModel):
+    """POST /api/v1/arena/posts/{post_id}/comments"""
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class CommentResponse(BaseModel):
+    """A single comment on an Arena post."""
+    id: uuid.UUID
+    post_id: uuid.UUID
+    author_id: uuid.UUID
+    author_username: str = "unknown"
+    author_avatar: Optional[str] = None
+    content: str
+    upvote_count: int = 0
+    is_hidden: bool = False
+    created_at: Optional[datetime] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Group Members & Leaderboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GroupMemberResponse(BaseModel):
+    """A member of a hub/group."""
+    user_id: uuid.UUID
+    username: str
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    karma_score: int = 0
+    joined_at: Optional[datetime] = None
+
+
+class LeaderboardEntry(BaseModel):
+    """Leaderboard entry for a group, ranked by karma."""
+    rank: int
+    user_id: uuid.UUID
+    username: str
+    avatar_url: Optional[str] = None
+    karma_score: int = 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Follows
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FollowResponse(BaseModel):
+    """Response from follow/unfollow actions."""
+    follower_id: uuid.UUID
+    following_id: uuid.UUID
+    message: str

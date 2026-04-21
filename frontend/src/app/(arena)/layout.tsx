@@ -1,200 +1,474 @@
 "use client";
+import React from "react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
-import { api } from "@/lib/api";
+import { useUserStore } from "@/stores/user-store";
 import {
-  Swords,
-  ArrowLeft,
-  Hash,
+  Home,
+  Search,
   MessageCircle,
-  Users,
-  Plus,
+  Users2,
+  User,
+  Zap,
+  ArrowLeft,
+  Star,
+  TrendingUp,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 
-interface Hub {
-  id: string;
-  name: string;
-  description: string | null;
-  icon_url: string | null;
-  member_count: number;
-  channel_count: number;
-}
-
-interface Channel {
-  id: string;
-  hub_id: string | null;
-  name: string;
-  kind: string;
-  description: string | null;
-}
+const NAV_ITEMS = [
+  { id: "feed", label: "Home", href: "/arena", icon: Home },
+  { id: "explore", label: "Explore", href: "/arena/explore", icon: Search },
+  { id: "messages", label: "Messages", href: "/arena/messages", icon: MessageCircle },
+  { id: "groups", label: "Groups", href: "/arena/groups", icon: Users2 },
+  { id: "profile", label: "Profile", href: "/arena/profile", icon: User },
+] as const;
 
 export default function ArenaLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { userId } = useAuth();
-  const [hubs, setHubs] = useState<Hub[]>([]);
-  const [selectedHub, setSelectedHub] = useState<Hub | null>(null);
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const { userId, karma, badges, logout } = useAuth();
+  const pathname = usePathname();
 
-  useEffect(() => {
-    api<Hub[]>("/api/v1/hubs").then(setHubs).catch(console.error);
-  }, []);
-
-  const selectHub = async (hub: Hub) => {
-    setSelectedHub(hub);
-    try {
-      const chs = await api<Channel[]>(`/api/v1/hubs/${hub.id}/channels`);
-      setChannels(chs);
-    } catch {
-      setChannels([]);
-    }
+  const getActiveNav = () => {
+    if (pathname === "/arena") return "feed";
+    if (pathname.startsWith("/arena/explore")) return "explore";
+    if (pathname.startsWith("/arena/messages")) return "messages";
+    if (pathname.startsWith("/arena/groups")) return "groups";
+    if (pathname.startsWith("/arena/profile")) return "profile";
+    return "feed";
   };
 
-  const joinHub = async (hubId: string) => {
-    if (!userId) return;
-    await api(`/api/v1/hubs/${hubId}/join`, { method: "POST", userId });
-  };
+  const activeNav = getActiveNav();
 
   return (
     <div className="h-screen flex flex-col bg-[var(--bg-primary)]">
-      {/* Top Bar */}
+      {/* ─── Top Bar ─── */}
       <header className="shrink-0 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl z-50">
-        <div className="flex items-center justify-between px-4 h-12">
+        <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-3">
             <Link
               href="/nexus"
               className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors text-sm"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Nexus
+              <span className="hidden sm:inline">Nexus</span>
             </Link>
-            <div className="w-px h-4 bg-[var(--border-subtle)]" />
+            <div className="w-px h-5 bg-[var(--border-subtle)]" />
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center">
-                <Swords className="w-3 h-3 text-white" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <Zap className="w-4 h-4 text-white" />
               </div>
-              <span className="font-semibold text-sm">The Arena</span>
+              <div>
+                <span className="font-bold text-sm gradient-text">The Arena</span>
+                <p className="text-[10px] text-[var(--text-muted)] leading-none mt-0.5">Compute-Driven Social</p>
+              </div>
             </div>
-            {selectedHub && (
-              <>
-                <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                <span className="text-sm text-[var(--text-secondary)]">
-                  {selectedHub.name}
-                </span>
-              </>
+          </div>
+
+          {/* Right side: karma + profile */}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)]">
+              <Star className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-xs font-bold text-amber-400">{karma}</span>
+              <span className="text-[10px] text-[var(--text-muted)]">karma</span>
+            </div>
+            {badges.length > 0 && (
+              <div className="hidden md:flex items-center gap-1">
+                {badges.slice(0, 3).map((badge) => (
+                  <span key={badge} className="text-sm" title={badge}>
+                    {badge === "first_post" ? "🌱" : badge === "serial_builder" ? "🏗️" : badge === "karma_100" ? "⚡" : badge === "karma_500" ? "🚀" : "👍"}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      {/* 3-Column Layout */}
+      {/* ─── 3-Column Layout ─── */}
       <div className="flex-1 flex min-h-0">
-        {/* Left: Hub Rail + Channel Panel */}
-        <aside className="shrink-0 flex border-r border-[var(--border-subtle)]">
-          {/* Hub Icons */}
-          <div className="w-[72px] bg-[var(--bg-secondary)] flex flex-col items-center py-3 gap-2 border-r border-[var(--border-subtle)]">
-            {/* Arena Feed shortcut */}
-            <Link
-              href="/arena"
-              className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center hover:rounded-xl transition-all duration-300 mb-2"
-            >
-              <Swords className="w-5 h-5 text-white" />
-            </Link>
-            <div className="w-8 h-px bg-[var(--border-subtle)] mb-1" />
-
-            {hubs.map((hub) => (
-              <motion.button
-                key={hub.id}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => selectHub(hub)}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold transition-all duration-300 hover:rounded-xl ${
-                  selectedHub?.id === hub.id
-                    ? "bg-violet-600 text-white rounded-xl"
-                    : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-violet-600/20 hover:text-[var(--text-primary)]"
-                }`}
-                title={hub.name}
-              >
-                {hub.icon_url ? (
-                  <img
-                    src={hub.icon_url}
-                    alt=""
-                    className="w-full h-full object-cover rounded-inherit"
-                  />
-                ) : (
-                  hub.name.charAt(0).toUpperCase()
-                )}
-              </motion.button>
-            ))}
-
-            <button className="w-12 h-12 rounded-2xl flex items-center justify-center text-[var(--text-muted)] hover:bg-emerald-600/20 hover:text-emerald-400 hover:rounded-xl transition-all duration-300 border border-dashed border-[var(--border-subtle)]">
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Channel List */}
-          {selectedHub && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 220, opacity: 1 }}
-              className="bg-[var(--bg-secondary)]/50 overflow-y-auto"
-            >
-              <div className="p-4">
-                <h3 className="font-semibold text-sm mb-1 truncate">
-                  {selectedHub.name}
-                </h3>
-                <p className="text-xs text-[var(--text-muted)] mb-3">
-                  {selectedHub.member_count} members
-                </p>
-                <button
-                  onClick={() => joinHub(selectedHub.id)}
-                  className="btn-primary w-full text-xs py-1.5 mb-4"
-                >
-                  Join Hub
-                </button>
-
-                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium mb-2">
-                  Channels
-                </p>
-                {channels.map((ch) => (
-                  <Link
-                    key={ch.id}
-                    href={`/arena/hubs/${selectedHub.id}?channel=${ch.id}`}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-colors"
+        {/* ── Left Column: Navigation ── */}
+        <aside className="hidden md:flex w-[240px] shrink-0 glass-nav flex-col justify-between py-4">
+          <nav className="px-3 space-y-1">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              return (
+                <Link key={item.id} href={item.href}>
+                  <motion.div
+                    className={`nav-item ${isActive ? "active" : ""}`}
+                    whileHover={{ x: 2 }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    {ch.kind === "text" ? (
-                      <Hash className="w-4 h-4 text-[var(--text-muted)]" />
-                    ) : (
-                      <MessageCircle className="w-4 h-4 text-[var(--text-muted)]" />
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                    {item.id === "messages" && (
+                      <span className="ml-auto relative">
+                        <span className="notification-dot" />
+                      </span>
                     )}
-                    {ch.name}
-                  </Link>
-                ))}
+                  </motion.div>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Bottom: Quick Stats + Post Button */}
+          <div className="px-3 space-y-3 mt-auto">
+            {/* Post Button */}
+            <Link href="/arena">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full btn-primary flex items-center justify-center gap-2 py-3"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Share Idea</span>
+              </motion.button>
+            </Link>
+
+            {/* User Card */}
+            <div className="glass-card p-3">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="avatar avatar-sm">
+                  {userId ? userId.charAt(0).toUpperCase() : "?"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate text-[var(--text-primary)]">Founder</p>
+                  <p className="text-[10px] text-[var(--text-muted)] truncate">{userId?.slice(0, 8)}...</p>
+                </div>
               </div>
-            </motion.div>
-          )}
-        </aside>
-
-        {/* Center: Main Content */}
-        <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
-
-        {/* Right: Members */}
-        <aside className="hidden lg:block w-[260px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)]/30 overflow-y-auto">
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-4 text-sm font-medium text-[var(--text-secondary)]">
-              <Users className="w-4 h-4" />
-              Online Members
+              <div className="flex items-center justify-between text-[10px]">
+                <div className="flex items-center gap-1 text-amber-400">
+                  <TrendingUp className="w-3 h-3" />
+                  <span className="font-bold">{karma}</span>
+                  <span className="text-[var(--text-muted)]">karma</span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="text-[var(--text-muted)] hover:text-[var(--accent-rose)] transition-colors"
+                  title="Log out"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-[var(--text-muted)]">
-              Select a hub to see members.
-            </p>
           </div>
         </aside>
+
+        {/* ── Mobile Bottom Nav ── */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border-subtle)] bg-[var(--bg-primary)]/90 backdrop-blur-xl">
+          <div className="flex items-center justify-around py-2">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className={`flex flex-col items-center gap-0.5 py-1 px-3 transition-colors ${
+                    isActive
+                      ? "text-[var(--accent-violet)]"
+                      : "text-[var(--text-muted)]"
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* ── Center Column: Dynamic Main View ── */}
+        <main className="flex-1 min-w-0 overflow-y-auto pb-16 md:pb-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="h-full"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+
+        {/* ── Right Column: Contextual Intelligence ── */}
+        <aside className="hidden lg:block w-[300px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)]/30 overflow-y-auto">
+          <RightSidebarContent activeNav={activeNav} />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Right Sidebar Content ─── */
+function RightSidebarContent({ activeNav }: { activeNav: string }) {
+  return (
+    <div className="p-4 space-y-6">
+      {activeNav === "feed" && <FeedSidebar />}
+      {activeNav === "explore" && <ExploreSidebar />}
+      {activeNav === "messages" && <MessagesSidebar />}
+      {activeNav === "groups" && <GroupsSidebar />}
+      {activeNav === "profile" && <ProfileSidebar />}
+    </div>
+  );
+}
+
+function FeedSidebar() {
+  return (
+    <>
+      {/* Trending Ideas */}
+      <TrendingSection />
+
+      {/* Suggested Founders */}
+      <SuggestedFoundersSection />
+
+      {/* Platform Stats */}
+      <PlatformStatsSection />
+    </>
+  );
+}
+
+function TrendingSection() {
+  const [ideas, setIdeas] = React.useState<{id: string; title: string; upvote_count: number; author_username: string}[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [expandedContent, setExpandedContent] = React.useState<string>("");
+
+  React.useEffect(() => {
+    import("@/lib/api").then(({ api }) => {
+      api<{id: string; title: string; upvote_count: number; author_username: string}[]>(
+        "/api/v1/arena/trending?limit=5"
+      )
+        .then(setIdeas)
+        .catch(() => {})
+        .finally(() => setLoaded(true));
+    });
+  }, []);
+
+  const handleClick = async (ideaId: string) => {
+    if (expandedId === ideaId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(ideaId);
+    setExpandedContent("Loading...");
+    try {
+      const { api } = await import("@/lib/api");
+      const post = await api<{ content?: string; title?: string }>(`/api/v1/arena/posts/${ideaId}`);
+      setExpandedContent(post.content || post.title || "No content available.");
+    } catch {
+      setExpandedContent("Could not load idea details.");
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp className="w-4 h-4 text-[var(--accent-cyan)]" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Trending Ideas</h3>
+      </div>
+      <div className="space-y-2">
+        {!loaded ? (
+          [1, 2, 3].map((i) => (
+            <div key={i} className="glass-card p-3 glass-card-hover">
+              <div className="skeleton h-3 w-3/4 mb-2" />
+              <div className="skeleton h-2 w-1/2" />
+            </div>
+          ))
+        ) : ideas.length === 0 ? (
+          <p className="text-xs text-[var(--text-muted)]">No trending ideas yet. Be the first!</p>
+        ) : (
+          ideas.map((idea) => (
+            <div
+              key={idea.id}
+              onClick={() => handleClick(idea.id)}
+              className="glass-card p-3 glass-card-hover cursor-pointer"
+            >
+              <p className="text-xs font-medium text-[var(--text-primary)] truncate">
+                {idea.title || "Untitled Idea"}
+              </p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                by @{idea.author_username} · ⬆{idea.upvote_count}
+              </p>
+              {expandedId === idea.id && (
+                <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
+                  <p className="text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap line-clamp-4">
+                    {expandedContent}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SuggestedFoundersSection() {
+  const [founders, setFounders] = React.useState<{id: string; username: string; display_name: string | null; karma_score: number}[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    import("@/lib/api").then(({ api }) => {
+      api<{id: string; username: string; display_name: string | null; karma_score: number}[]>(
+        "/api/v1/arena/suggested-founders?limit=5"
+      )
+        .then(setFounders)
+        .catch(() => {})
+        .finally(() => setLoaded(true));
+    });
+  }, []);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Users2 className="w-4 h-4 text-[var(--accent-violet)]" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Suggested Founders</h3>
+      </div>
+      <div className="space-y-2">
+        {!loaded ? (
+          [1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-2.5 p-2 rounded-lg">
+              <div className="avatar avatar-sm">{String.fromCharCode(64 + i)}</div>
+              <div className="flex-1 min-w-0">
+                <div className="skeleton h-3 w-20 mb-1" />
+                <div className="skeleton h-2 w-14" />
+              </div>
+            </div>
+          ))
+        ) : founders.length === 0 ? (
+          <p className="text-xs text-[var(--text-muted)]">No founders to suggest yet.</p>
+        ) : (
+          founders.map((f) => (
+            <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <div className="avatar avatar-sm">{f.username.charAt(0).toUpperCase()}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-[var(--text-primary)] truncate">{f.display_name || f.username}</p>
+                <p className="text-[10px] text-[var(--text-muted)]">@{f.username} · ⚡{f.karma_score}</p>
+              </div>
+              <button className="text-[10px] px-2.5 py-1 rounded-lg bg-[var(--accent-violet)]/10 text-[var(--accent-violet)] font-medium hover:bg-[var(--accent-violet)]/20 transition-colors">
+                Follow
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExploreSidebar() {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Search className="w-4 h-4 text-[var(--accent-cyan)]" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Search Tips</h3>
+      </div>
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <ChevronRight className="w-3 h-3 text-[var(--accent-violet)]" />
+          <span>Search by market gap keywords</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <ChevronRight className="w-3 h-3 text-[var(--accent-violet)]" />
+          <span>Find founders by username</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <ChevronRight className="w-3 h-3 text-[var(--accent-violet)]" />
+          <span>Filter ideas by tags</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessagesSidebar() {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <MessageCircle className="w-4 h-4 text-[var(--accent-emerald)]" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Quick Actions</h3>
+      </div>
+      <div className="glass-card p-4 space-y-2">
+        <p className="text-xs text-[var(--text-secondary)]">
+          Share ideas in DMs to get instant AI validation. Click the <strong>+</strong> button in any chat to run an AI analysis.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function GroupsSidebar() {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Users2 className="w-4 h-4 text-[var(--accent-violet)]" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Your Groups</h3>
+      </div>
+      <p className="text-xs text-[var(--text-muted)]">
+        Join a group to see members and the leaderboard here.
+      </p>
+    </div>
+  );
+}
+
+function ProfileSidebar() {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Star className="w-4 h-4 text-amber-400" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Achievements</h3>
+      </div>
+      <div className="glass-card p-4">
+        <p className="text-xs text-[var(--text-secondary)]">
+          Earn badges by publishing ideas, receiving upvotes, and engaging with the community.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PlatformStatsSection() {
+  const [stats, setStats] = React.useState({ ideas: 0, founders: 0 });
+
+  React.useEffect(() => {
+    import("@/lib/supabase").then(({ supabase }) => {
+      Promise.all([
+        supabase.from("validations").select("id", { count: "exact", head: true }),
+        supabase.from("profiles").select("id", { count: "exact", head: true }),
+      ]).then(([valRes, profRes]) => {
+        setStats({
+          ideas: valRes.count || 0,
+          founders: profRes.count || 0,
+        });
+      }).catch(() => {});
+    });
+  }, []);
+
+  return (
+    <div className="glass-card p-4">
+      <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Platform</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-lg font-bold gradient-text">{stats.ideas}</p>
+          <p className="text-[10px] text-[var(--text-muted)]">Ideas Validated</p>
+        </div>
+        <div>
+          <p className="text-lg font-bold text-[var(--accent-emerald)]">{stats.founders}</p>
+          <p className="text-[10px] text-[var(--text-muted)]">Founders Active</p>
+        </div>
       </div>
     </div>
   );
