@@ -53,33 +53,33 @@ The system is split into a **Next.js Frontend** and a **FastAPI + Celery Backend
 
 ```mermaid
 flowchart TB
-    subgraph Client["🖥️ Frontend (Next.js + Tailwind)"]
+    subgraph ClientLayer["🖥️ Frontend (Next.js + Tailwind)"]
         UI[React Components]
         Store[Zustand Stores]
         WS[WebSocket Client]
     end
 
-    subgraph Backend["⚙️ Backend (FastAPI + Celery)"]
+    subgraph BackendLayer["⚙️ Backend (FastAPI + Celery)"]
         API[FastAPI Endpoints]
         WS_Manager[WebSocket Manager]
         Worker[Celery Worker Nodes]
-        AI[AI Pipeline (Gemini/Groq)]
+        AI[AI Pipeline]
     end
 
-    subgraph Infrastructure["☁️ Infrastructure & State"]
+    subgraph InfraLayer["☁️ Infrastructure & State"]
         MQ[(RabbitMQ)]
         Cache[(Redis Cache & Pub/Sub)]
         DB[(Supabase PostgreSQL + pgvector)]
     end
 
-    subgraph External["🌐 External APIs"]
+    subgraph ExternalLayer["🌐 External APIs"]
         Firecrawl[Firecrawl API]
         Social[Reddit API]
         Patents["USPTO / EPO"]
     end
 
-    Client -->|REST| API
-    Client -->|WebSockets| WS_Manager
+    UI -->|REST| API
+    WS -->|WebSockets| WS_Manager
     
     API -->|Anchors State| DB
     API -->|Enqueues Task| MQ
@@ -104,28 +104,28 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph External["External Entities"]
-        Founder[("👤 Founder / User")]
-        Web[("🌐 Competitor Web Pages")]
-        LLMs[("🧠 External LLMs (Gemini/Groq)")]
+        Founder("👤 Founder / User")
+        Web("🌐 Competitor Web Pages")
+        LLMs("🧠 External LLMs")
     end
 
     subgraph System["StartupScope AI System"]
-        Core[("Core System<br>• Idea Validation<br>• Competitor Scouting<br>• Market Analytics<br>• RAG & Synthesis")]
+        Core("Core System<br/>• Idea Validation<br/>• Competitor Scouting<br/>• Market Analytics<br/>• RAG & Synthesis")
     end
 
     Founder -->|Submits Startup Idea| Core
     Founder -->|Follow-up Questions| Core
     Founder -->|Collaboration Invites| Core
     
-    Core -->|Live Status Streams (WS)| Founder
-    Core -->|Validation Reports (PDF/JSON)| Founder
+    Core -->|Live Status Streams WS| Founder
+    Core -->|Validation Reports| Founder
     Core -->|Comparison Metrics| Founder
 
-    Core -->|Search Intents / URLs| Web
-    Web -->|Raw HTML / Pricing / Funding| Core
+    Core -->|Search Intents| Web
+    Web -->|Raw HTML / Pricing| Core
     
     Core -->|Prompts + Context Data| LLMs
-    LLMs -->|Structured Analysis & Consensus| Core
+    LLMs -->|Structured Analysis| Core
 
     style Core fill:#8B5CF6,stroke:#EC4899,stroke-width:3px,color:#fff
 ```
