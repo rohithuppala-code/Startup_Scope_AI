@@ -75,24 +75,24 @@ flowchart TB
     subgraph External["🌐 External APIs"]
         Firecrawl[Firecrawl API]
         Social[Reddit API]
-        Patents[USPTO / EPO]
+        Patents["USPTO / EPO"]
     end
 
-    Client --REST--> API
-    Client --WebSockets--> WS_Manager
+    Client -->|REST| API
+    Client -->|WebSockets| WS_Manager
     
-    API --Anchors State--> DB
-    API --Enqueues Task--> MQ
+    API -->|Anchors State| DB
+    API -->|Enqueues Task| MQ
     
-    MQ --Consumes--> Worker
-    Worker --Scrapes--> Firecrawl
-    Worker --Queries--> Social
-    Worker --Queries--> Patents
-    Worker --Reasons--> AI
-    Worker --Updates--> DB
-    Worker --Publishes Event--> Cache
+    MQ -->|Consumes| Worker
+    Worker -->|Scrapes| Firecrawl
+    Worker -->|Queries| Social
+    Worker -->|Queries| Patents
+    Worker -->|Reasons| AI
+    Worker -->|Updates| DB
+    Worker -->|Publishes Event| Cache
     
-    Cache --Subscribes--> WS_Manager
+    Cache -->|Subscribes| WS_Manager
 ```
 
 ---
@@ -110,11 +110,7 @@ flowchart TB
     end
 
     subgraph System["StartupScope AI System"]
-        Core[("Core System
-        • Idea Validation
-        • Competitor Scouting
-        • Market Analytics
-        • RAG & Synthesis")]
+        Core[("Core System<br>• Idea Validation<br>• Competitor Scouting<br>• Market Analytics<br>• RAG & Synthesis")]
     end
 
     Founder -->|Submits Startup Idea| Core
