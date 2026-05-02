@@ -52,27 +52,27 @@
 }
 
 :root[data-theme='light'], .light {
-  /* ─── Light Premium Palette ─── */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5;
-  --bg-tertiary: #e4e4e7;
-  --bg-card: rgba(255, 255, 255, 0.85);
-  --bg-glass: rgba(0, 0, 0, 0.035);
-  --bg-glass-strong: rgba(0, 0, 0, 0.065);
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-glow: rgba(139, 92, 246, 0.4);
-  --border-cyan-glow: rgba(6, 182, 212, 0.4);
-  --text-primary: #09090b;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
-  --accent-violet: #7c3aed;
-  --accent-cyan: #0891b2;
-  --accent-emerald: #059669;
-  --accent-rose: #e11d48;
-  --accent-amber: #d97706;
-  --glow-violet: 0 0 20px rgba(139, 92, 246, 0.2), 0 0 60px rgba(139, 92, 246, 0.1);
-  --glow-cyan: 0 0 20px rgba(6, 182, 212, 0.2), 0 0 60px rgba(6, 182, 212, 0.1);
-  --glow-emerald: 0 0 20px rgba(16, 185, 129, 0.2), 0 0 60px rgba(16, 185, 129, 0.1);
+  /* ─── Dim/Slate Palette (Dark colors for 'light' theme as requested) ─── */
+  --bg-primary: #1e293b; /* slate-800 */
+  --bg-secondary: #0f172a; /* slate-900 */
+  --bg-tertiary: #334155; /* slate-700 */
+  --bg-card: rgba(15, 23, 42, 0.6);
+  --bg-glass: rgba(255, 255, 255, 0.05);
+  --bg-glass-strong: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-glow: rgba(139, 92, 246, 0.35);
+  --border-cyan-glow: rgba(6, 182, 212, 0.35);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-violet: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+  --accent-amber: #f59e0b;
+  --glow-violet: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 60px rgba(139, 92, 246, 0.05);
+  --glow-cyan: 0 0 20px rgba(6, 182, 212, 0.15), 0 0 60px rgba(6, 182, 212, 0.05);
+  --glow-emerald: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 60px rgba(16, 185, 129, 0.05);
 }
 
 /* ─── Base ─── */
