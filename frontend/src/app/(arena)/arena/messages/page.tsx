@@ -73,7 +73,7 @@ export default function MessagesPage() {
   }, [userId]);
 
   const filteredConversations = conversations.filter((c) =>
-    c.participant_username?.toLowerCase().includes(searchQuery.toLowerCase())
+    c.participant_username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const initNewDM = useCallback(async (profile: SearchProfile) => {
