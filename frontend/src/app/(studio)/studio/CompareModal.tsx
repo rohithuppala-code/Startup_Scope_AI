@@ -40,38 +40,40 @@ export function CompareModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 sm:p-6"
     >
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="glass-card w-full max-w-2xl flex flex-col max-h-[80vh]"
+        initial={{ scale: 0.95, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }}
+        className="glass-card noise-overlay w-full max-w-2xl flex flex-col max-h-[85vh] shadow-2xl border-white/10"
       >
-        <div className="p-5 border-b border-white/5 flex items-center justify-between shrink-0">
+        <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-black/20">
           <div>
-            <h3 className="text-lg font-bold flex items-center gap-2">
+            <h3 className="text-xl font-bold flex items-center gap-2 text-[var(--text-primary)] tracking-tight">
               <GitCompare className="w-5 h-5 text-[var(--accent-violet)]" />
               Compare Ideas
             </h3>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">
+            <p className="text-sm font-medium text-[var(--text-secondary)] mt-1.5">
               Select up to 10 completed validations to compare head-to-head.
             </p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-all shadow-sm">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-[var(--text-muted)]">
-              <Loader2 className="w-6 h-6 animate-spin mr-2" />
-              Loading your ideas...
+            <div className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+              <Loader2 className="w-8 h-8 animate-spin mb-4 text-[var(--accent-violet)]" />
+              <p className="text-sm font-medium">Loading your ideas...</p>
             </div>
           ) : validations.length < 2 ? (
-            <div className="text-center py-10 text-[var(--text-muted)]">
-              You need at least 2 completed validations to compare.
+            <div className="text-center py-16 text-[var(--text-muted)] glass-card border-dashed">
+              <GitCompare className="w-10 h-10 mx-auto mb-3 opacity-50" />
+              <p className="text-[15px] font-semibold text-[var(--text-primary)] tracking-tight">Not enough validations</p>
+              <p className="text-sm mt-1">You need at least 2 completed validations to compare.</p>
             </div>
           ) : (
             validations.map((val) => {
@@ -83,32 +85,32 @@ export function CompareModal({
                 <div
                   key={val.id}
                   onClick={() => toggleSelect(val.id)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-4 ${
+                  className={`p-5 rounded-2xl border transition-all cursor-pointer flex items-start gap-4 ${
                     isSelected
-                      ? "bg-violet-500/10 border-violet-500/30"
-                      : "bg-black/20 border-white/5 hover:border-white/10"
-                  } ${isCurrent ? "opacity-75 cursor-default" : ""}`}
+                      ? "bg-violet-500/10 border-violet-500/40 shadow-[inset_0_0_20px_rgba(139,92,246,0.1)]"
+                      : "bg-black/20 border-[var(--border-subtle)] hover:border-white/20 hover:bg-black/30"
+                  } ${isCurrent ? "opacity-80 cursor-default" : ""}`}
                 >
-                  <div className="pt-1">
+                  <div className="pt-1.5 shrink-0">
                     {isSelected ? (
-                      <CheckCircle2 className="w-5 h-5 text-violet-400" />
+                      <CheckCircle2 className="w-5 h-5 text-violet-400 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]" />
                     ) : (
-                      <div className="w-5 h-5 rounded-full border-2 border-[var(--text-muted)]" />
+                      <div className="w-5 h-5 rounded-full border-2 border-[var(--text-muted)]/50" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm line-clamp-2 leading-relaxed">
+                    <p className={`font-semibold text-[15px] line-clamp-2 leading-relaxed tracking-tight ${isSelected ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
                       {val.idea_description}
                     </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-[var(--text-muted)]">
-                      <span>{new Date(val.created_at).toLocaleDateString()}</span>
+                    <div className="flex flex-wrap items-center gap-3 mt-3 text-xs font-medium text-[var(--text-muted)]">
+                      <span className="bg-white/5 px-2 py-1 rounded-md">{new Date(val.created_at).toLocaleDateString()}</span>
                       {score && (
-                        <span className="flex items-center gap-1 text-emerald-400/80">
+                        <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-md">
                           Score: {score}
                         </span>
                       )}
                       {isCurrent && (
-                        <span className="text-violet-400 font-medium">Current Validation</span>
+                        <span className="text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2 py-1 rounded-md">Current Validation</span>
                       )}
                     </div>
                   </div>
@@ -118,14 +120,14 @@ export function CompareModal({
           )}
         </div>
 
-        <div className="p-5 border-t border-white/5 bg-black/20 shrink-0 flex items-center justify-between">
-          <span className="text-sm text-[var(--text-muted)]">
-            {selected.size} / 10 selected
+        <div className="p-6 border-t border-[var(--border-subtle)] bg-black/40 shrink-0 flex items-center justify-between backdrop-blur-md">
+          <span className="text-sm font-semibold text-[var(--text-muted)]">
+            <span className="text-[var(--text-primary)]">{selected.size}</span> / 10 selected
           </span>
           <button
             onClick={() => onCompare(Array.from(selected))}
             disabled={selected.size < 2}
-            className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            className="btn-primary py-2.5 px-6 flex items-center gap-2 disabled:opacity-50 font-semibold shadow-lg shadow-violet-500/20"
           >
             <GitCompare className="w-4 h-4" />
             Run Comparison

@@ -252,10 +252,10 @@ export default function ChatTimeline({
     }, {});
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[var(--bg-primary)]">
       {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-[var(--border-subtle)] flex items-center gap-3">
-        <div className="avatar avatar-sm">
+      <div className="shrink-0 px-5 py-4 border-b border-[var(--border-subtle)] flex items-center gap-4 bg-black/10 backdrop-blur-md z-10 relative shadow-sm">
+        <div className="avatar avatar-sm shadow-md">
           {participantAvatar ? (
             <img src={participantAvatar} alt="" />
           ) : (
@@ -263,12 +263,12 @@ export default function ChatTimeline({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+          <p className="text-base font-bold text-[var(--text-primary)] truncate tracking-tight">
             {participantName}
           </p>
-          <p className="text-[10px] text-[var(--text-muted)]">
+          <p className="text-[11px] font-medium text-[var(--text-muted)] mt-0.5">
             {isConnected ? (
-              <span className="text-emerald-400">● Online</span>
+              <span className="text-emerald-400 drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">● Online</span>
             ) : (
               <span>● Connecting...</span>
             )}
@@ -279,7 +279,7 @@ export default function ChatTimeline({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleSynthesize}
-          className={`btn-icon text-xs ${synthResult ? "text-cyan-400" : ""}`}
+          className={`p-2.5 rounded-xl border transition-all shadow-sm ${synthResult ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400" : "bg-white/5 border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/5"}`}
           title="AI Synthesize Thread"
         >
           <Sparkles className="w-4 h-4" />
@@ -293,32 +293,32 @@ export default function ChatTimeline({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-b border-[var(--border-subtle)]"
+            className="overflow-hidden border-b border-[var(--border-subtle)] bg-cyan-500/[0.03]"
           >
-            <div className="p-3 bg-cyan-500/5 border-l-2 border-cyan-500/40">
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-xs font-semibold text-cyan-400">AI Thread Synthesis</span>
-                <button onClick={() => setSynthResult(null)} className="ml-auto btn-icon">
-                  <X className="w-3 h-3" />
+            <div className="p-4 border-l-2 border-cyan-500/50 shadow-inner">
+              <div className="flex items-center gap-2.5 mb-2">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span className="text-sm font-bold text-cyan-400 tracking-tight">AI Thread Synthesis</span>
+                <button onClick={() => setSynthResult(null)} className="ml-auto p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                  <X className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 </button>
               </div>
-              <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap">{synthResult}</p>
+              <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">{synthResult}</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Messages Timeline */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-5 scroll-smooth">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mb-3 border border-[var(--border-subtle)]">
-              <MessageSquare className="w-6 h-6 text-[var(--text-muted)]" />
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mb-4 border border-[var(--border-subtle)] shadow-lg shadow-violet-500/5">
+              <MessageSquare className="w-8 h-8 text-[var(--text-muted)]" />
             </div>
-            <p className="text-sm text-[var(--text-secondary)] mb-1">No messages yet</p>
-            <p className="text-xs text-[var(--text-muted)]">
-              Start the conversation, share an idea, or create a poll
+            <p className="text-base font-semibold text-[var(--text-primary)] mb-1.5 tracking-tight">No messages yet</p>
+            <p className="text-sm text-[var(--text-muted)] max-w-xs leading-relaxed">
+              Start the conversation, share an idea, or create a poll to get started.
             </p>
           </div>
         )}
@@ -339,7 +339,7 @@ export default function ChatTimeline({
               try {
                 const payload = JSON.parse(msg.content.slice(7));
                 customContent = (
-                  <div className="w-[460px] max-w-full text-left pointer-events-auto mt-1">
+                  <div className="w-[460px] max-w-full text-left pointer-events-auto mt-2">
                     <LiveIdeaCard
                       postId={payload.post_id}
                       validationId={payload.validation_id}
@@ -354,7 +354,7 @@ export default function ChatTimeline({
                 const payload = JSON.parse(msg.content.slice(7));
                 const votesForThisPoll = pollVotes.filter(v => v.message_id === msg.id);
                 customContent = (
-                  <div className="mt-1">
+                  <div className="mt-2">
                     <GroupPollCard
                       payload={payload}
                       messageId={msg.id}
@@ -373,23 +373,23 @@ export default function ChatTimeline({
                 const sizeMb = (payload.size / (1024 * 1024)).toFixed(1);
                 const sizeLabel = payload.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
                 customContent = (
-                  <div className={`mt-1 flex items-center gap-3 px-4 py-3 rounded-2xl min-w-[240px] max-w-[340px] border ${
+                  <div className={`mt-2 flex items-center gap-4 px-5 py-4 rounded-2xl min-w-[260px] max-w-[360px] shadow-sm transition-all hover:-translate-y-0.5 ${
                     isMine
-                      ? "bg-violet-600/30 border-violet-500/40"
-                      : "bg-[var(--bg-secondary)] border-[var(--border-subtle)]"
+                      ? "bg-violet-600/20 border border-violet-500/30"
+                      : "glass-card"
                   }`}>
                     {/* File icon */}
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-lg font-bold ${
-                      isPdf ? "bg-red-500/20 text-red-400" : "bg-amber-400/15 text-amber-400"
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-lg font-bold shadow-inner ${
+                      isPdf ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "bg-amber-400/10 text-amber-400 border border-amber-400/20"
                     }`}>
-                      {isPdf ? "PDF" : <FileIcon className="w-5 h-5" />}
+                      {isPdf ? "PDF" : <FileIcon className="w-6 h-6" />}
                     </div>
                     {/* Name & size */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[var(--text-primary)] truncate leading-tight" title={payload.name}>
+                      <p className="text-[15px] font-semibold text-[var(--text-primary)] truncate tracking-tight mb-0.5" title={payload.name}>
                         {payload.name}
                       </p>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{sizeLabel}</p>
+                      <p className="text-xs font-medium text-[var(--text-muted)]">{sizeLabel}</p>
                     </div>
                     {/* Download */}
                     <a
@@ -397,10 +397,10 @@ export default function ChatTimeline({
                       target="_blank"
                       rel="noopener noreferrer"
                       download={payload.name}
-                      className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+                      className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 border border-[var(--border-subtle)] hover:bg-white/10 hover:border-white/20 transition-all shrink-0 shadow-sm"
                       title="Download"
                     >
-                      <Download className="w-4 h-4 text-[var(--text-secondary)]" />
+                      <Download className="w-5 h-5 text-[var(--text-secondary)]" />
                     </a>
                   </div>
                 );
@@ -410,13 +410,13 @@ export default function ChatTimeline({
             return (
               <motion.div
                 key={msg.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${isMine ? "justify-end" : "justify-start"} group`}
               >
-                <div className="flex items-end gap-2 max-w-[92%]">
+                <div className="flex items-end gap-3 max-w-[85%] md:max-w-[75%]">
                   {!isMine && (
-                    <div className="avatar avatar-sm shrink-0 mb-0.5">
+                    <div className="avatar avatar-sm shrink-0 mb-1 shadow-sm">
                       {participantAvatar ? (
                         <img src={participantAvatar} alt="" />
                       ) : (
@@ -427,16 +427,16 @@ export default function ChatTimeline({
                   <div className="relative flex flex-col">
                     {customContent ? customContent : (
                     <div
-                      className={`chat-bubble ${
-                        isMine ? "chat-bubble-sent" : "chat-bubble-received"
-                      } ${isPoll ? "border-l-2 border-violet-500/40" : ""} ${isIdea ? "border-l-2 border-cyan-500/40" : ""} ${isFile ? "border-l-2 border-amber-400/40" : ""}`}
+                      className={`chat-bubble text-[15px] ${
+                        isMine ? "chat-bubble-sent shadow-md shadow-violet-500/10" : "chat-bubble-received shadow-sm"
+                      } ${isPoll ? "border-l-2 border-l-violet-500/50" : ""} ${isIdea ? "border-l-2 border-l-cyan-500/50" : ""} ${isFile ? "border-l-2 border-l-amber-400/50" : ""}`}
                     >
                       {msg.content.split("\n").map((line, i) => (
                         <span key={i}>
                           {line.startsWith("**") && line.endsWith("**") ? (
-                            <strong className="text-[var(--text-primary)]">{line.replace(/\*\*/g, "")}</strong>
+                            <strong className="text-[var(--text-primary)] font-bold">{line.replace(/\*\*/g, "")}</strong>
                           ) : line.startsWith("_") && line.endsWith("_") ? (
-                            <em className="text-[var(--text-muted)] text-xs">{line.replace(/_/g, "")}</em>
+                            <em className="text-[var(--text-muted)] text-[13px] font-medium">{line.replace(/_/g, "")}</em>
                           ) : (
                             line
                           )}
@@ -448,15 +448,15 @@ export default function ChatTimeline({
 
                     {/* Reactions Display */}
                     {Object.keys(msgReactions).length > 0 && (
-                      <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"} px-1`}>
+                      <div className={`flex flex-wrap gap-1.5 mt-2 ${isMine ? "justify-end" : "justify-start"} px-1`}>
                         {Object.entries(msgReactions).map(([emoji, users]) => (
                           <button
                             key={emoji}
                             onClick={() => handleReaction(msg.id, emoji)}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors ${
+                            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors shadow-sm ${
                               users.includes(userId || "")
-                                ? "bg-violet-500/20 border-violet-500/40 text-violet-300"
-                                : "bg-[var(--bg-glass)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/5"
+                                ? "bg-violet-500/15 border-violet-500/30 text-violet-300"
+                                : "bg-[var(--bg-glass)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/10"
                             }`}
                           >
                             <span>{emoji}</span>
@@ -467,8 +467,8 @@ export default function ChatTimeline({
                     )}
 
                     {/* Reply + Timestamp + Reaction Button */}
-                    <div className={`flex items-center gap-2 mt-0.5 ${isMine ? "justify-end" : "justify-start"} px-1 relative`}>
-                      <p className="text-[10px] text-[var(--text-muted)]">
+                    <div className={`flex items-center gap-3 mt-1.5 ${isMine ? "justify-end" : "justify-start"} px-2 relative`}>
+                      <p className="text-[11px] font-medium text-[var(--text-muted)]">
                         {new Date(msg.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -482,30 +482,34 @@ export default function ChatTimeline({
                           else if (isPoll) { try { previewText = `📊 ${JSON.parse(msg.content.slice(7)).question}`; } catch { previewText = "📊 Poll"; } }
                           setReplyTo({ id: msg.id, content: previewText });
                         }}
-                        className="text-[10px] text-[var(--text-muted)] hover:text-[var(--accent-violet)] opacity-0 group-hover:opacity-100 transition-all"
+                        className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--accent-violet)] opacity-0 group-hover:opacity-100 transition-all"
                       >
                         Reply
                       </button>
                       <button
                         onClick={() => setActiveReactionMsg(activeReactionMsg === msg.id ? null : msg.id)}
-                        className="text-[10px] text-[var(--text-muted)] hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all"
+                        className="text-[11px] text-[var(--text-muted)] hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-all"
                       >
-                        <Smile className="w-3 h-3" />
+                        <Smile className="w-3.5 h-3.5" />
                       </button>
                       
                       {/* Emoji Picker Popup */}
                       {activeReactionMsg === msg.id && (
-                        <div className={`absolute top-full mt-1 z-50 flex items-center gap-1 p-1 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-full shadow-lg ${isMine ? "right-0" : "left-0"}`}>
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.9 }} 
+                          animate={{ opacity: 1, scale: 1 }}
+                          className={`absolute top-full mt-2 z-50 flex items-center gap-1.5 p-1.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-full shadow-xl ${isMine ? "right-0" : "left-0"}`}
+                        >
                           {["👍", "❤️", "😂", "🔥", "🚀", "👀"].map(emoji => (
                             <button
                               key={emoji}
                               onClick={() => handleReaction(msg.id, emoji)}
-                              className="w-6 h-6 flex items-center justify-center text-sm hover:bg-white/10 rounded-full transition-colors"
+                              className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/10 rounded-full transition-colors"
                             >
                               {emoji}
                             </button>
                           ))}
-                        </div>
+                        </motion.div>
                       )}
                     </div>
                   </div>
@@ -517,7 +521,7 @@ export default function ChatTimeline({
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 px-4 py-3 border-t border-[var(--border-subtle)]">
+      <div className="shrink-0 px-5 py-4 border-t border-[var(--border-subtle)] bg-black/10 backdrop-blur-lg">
         {/* Reply Preview */}
         <AnimatePresence>
           {replyTo && (
@@ -525,13 +529,16 @@ export default function ChatTimeline({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mb-2"
+              className="overflow-hidden mb-3"
             >
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-violet-500/5 border border-violet-500/10">
-                <div className="w-0.5 h-full min-h-[24px] bg-violet-500/40 rounded-full" />
-                <p className="text-xs text-[var(--accent-violet)] flex-1 truncate">{replyTo.content}</p>
-                <button onClick={() => setReplyTo(null)} className="btn-icon">
-                  <X className="w-3 h-3" />
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 shadow-inner">
+                <div className="w-1 h-full min-h-[30px] bg-violet-500/50 rounded-full" />
+                <p className="text-sm font-medium text-[var(--text-secondary)] flex-1 truncate">
+                  <span className="text-[var(--accent-violet)] font-bold mr-2">Replying to:</span>
+                  {replyTo.content}
+                </p>
+                <button onClick={() => setReplyTo(null)} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                  <X className="w-4 h-4 text-[var(--text-muted)]" />
                 </button>
               </div>
             </motion.div>
@@ -545,21 +552,21 @@ export default function ChatTimeline({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mb-3"
+              className="overflow-hidden mb-4"
             >
-              <div className="glass-card p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-cyan-400" />
-                  <span className="text-xs font-semibold text-cyan-400">Share Idea + AI Validation</span>
-                  <button onClick={() => { setShowIdeaInput(false); setIdeaText(""); setIdeaMarket(""); setIdeaBudget(""); }} className="ml-auto btn-icon"><X className="w-3 h-3" /></button>
+              <div className="glass-card p-5 space-y-4 shadow-lg border-cyan-500/30 bg-cyan-500/[0.02]">
+                <div className="flex items-center gap-2.5">
+                  <Zap className="w-5 h-5 text-cyan-400" />
+                  <span className="text-sm font-bold text-cyan-400 tracking-tight">Share Idea + AI Validation</span>
+                  <button onClick={() => { setShowIdeaInput(false); setIdeaText(""); setIdeaMarket(""); setIdeaBudget(""); }} className="ml-auto p-1.5 rounded-lg hover:bg-white/10 transition-colors"><X className="w-4 h-4 text-[var(--text-muted)]" /></button>
                 </div>
-                <textarea value={ideaText} onChange={(e) => setIdeaText(e.target.value)} placeholder="Describe your startup idea in detail — what problem it solves, who it's for..." className="input-dark text-sm w-full" rows={3} autoFocus />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" value={ideaMarket} onChange={(e) => setIdeaMarket(e.target.value)} placeholder="Target Market (e.g. B2B SaaS)" className="input-dark text-xs" />
-                  <input type="text" value={ideaBudget} onChange={(e) => setIdeaBudget(e.target.value)} placeholder="Budget (e.g. $10k)" className="input-dark text-xs" />
+                <textarea value={ideaText} onChange={(e) => setIdeaText(e.target.value)} placeholder="Describe your startup idea in detail — what problem it solves, who it's for..." className="input-dark text-sm w-full min-h-[100px] resize-y" autoFocus />
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="text" value={ideaMarket} onChange={(e) => setIdeaMarket(e.target.value)} placeholder="Target Market (e.g. B2B SaaS)" className="input-dark text-sm" />
+                  <input type="text" value={ideaBudget} onChange={(e) => setIdeaBudget(e.target.value)} placeholder="Budget (e.g. $10k)" className="input-dark text-sm" />
                 </div>
-                <motion.button whileTap={{ scale: 0.98 }} onClick={handleShareIdea} disabled={!ideaText.trim() || submitting} className="btn-primary text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-50">
-                  {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                <motion.button whileTap={{ scale: 0.98 }} onClick={handleShareIdea} disabled={!ideaText.trim() || submitting} className="btn-primary py-2.5 w-full flex items-center justify-center gap-2 disabled:opacity-50 font-semibold shadow-md">
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                   {submitting ? "Submitting..." : "Share & Run AI"}
                 </motion.button>
               </div>
@@ -574,21 +581,23 @@ export default function ChatTimeline({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mb-3"
+              className="overflow-hidden mb-4"
             >
-              <div className="glass-card p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-violet-400" />
-                  <span className="text-xs font-semibold text-violet-400">Create Poll</span>
-                  <button onClick={() => { setShowPollCreator(false); setPollQuestion(""); setPollOptions(["", ""]); }} className="ml-auto btn-icon"><X className="w-3 h-3" /></button>
+              <div className="glass-card p-5 space-y-4 shadow-lg border-violet-500/30 bg-violet-500/[0.02]">
+                <div className="flex items-center gap-2.5">
+                  <BarChart3 className="w-5 h-5 text-violet-400" />
+                  <span className="text-sm font-bold text-violet-400 tracking-tight">Create Poll</span>
+                  <button onClick={() => { setShowPollCreator(false); setPollQuestion(""); setPollOptions(["", ""]); }} className="ml-auto p-1.5 rounded-lg hover:bg-white/10 transition-colors"><X className="w-4 h-4 text-[var(--text-muted)]" /></button>
                 </div>
-                <input type="text" value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="Poll question..." className="input-dark text-sm" autoFocus />
-                {pollOptions.map((opt, i) => (
-                  <input key={i} type="text" value={opt} onChange={(e) => { const n = [...pollOptions]; n[i] = e.target.value; setPollOptions(n); }} placeholder={`Option ${String.fromCharCode(65 + i)}`} className="input-dark text-xs" />
-                ))}
-                <button onClick={() => setPollOptions([...pollOptions, ""])} className="text-xs text-[var(--accent-violet)] hover:underline">+ Add option</button>
-                <motion.button whileTap={{ scale: 0.98 }} onClick={handleCreatePoll} disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2 || submitting} className="btn-primary text-xs w-full flex items-center justify-center gap-1.5 disabled:opacity-50">
-                  {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart3 className="w-3.5 h-3.5" />}
+                <input type="text" value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="Poll question..." className="input-dark text-sm font-semibold" autoFocus />
+                <div className="space-y-2.5">
+                  {pollOptions.map((opt, i) => (
+                    <input key={i} type="text" value={opt} onChange={(e) => { const n = [...pollOptions]; n[i] = e.target.value; setPollOptions(n); }} placeholder={`Option ${String.fromCharCode(65 + i)}`} className="input-dark text-sm" />
+                  ))}
+                </div>
+                <button onClick={() => setPollOptions([...pollOptions, ""])} className="text-sm font-medium text-[var(--accent-violet)] hover:underline flex items-center gap-1">+ Add option</button>
+                <motion.button whileTap={{ scale: 0.98 }} onClick={handleCreatePoll} disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2 || submitting} className="btn-primary py-2.5 w-full flex items-center justify-center gap-2 disabled:opacity-50 font-semibold shadow-md">
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
                   {submitting ? "Creating..." : "Send Poll"}
                 </motion.button>
               </div>
@@ -599,12 +608,12 @@ export default function ChatTimeline({
         {/* Action Menu */}
         <AnimatePresence>
           {actionMenuOpen && !showIdeaInput && !showPollCreator && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="action-menu mb-2">
-              <button onClick={() => { setShowIdeaInput(true); setActionMenuOpen(false); }} className="action-menu-item w-full">
-                <Zap className="w-4 h-4 text-cyan-400" /><span>Share Idea (Run AI)</span>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="action-menu mb-3">
+              <button onClick={() => { setShowIdeaInput(true); setActionMenuOpen(false); }} className="action-menu-item w-full py-3">
+                <Zap className="w-4 h-4 text-cyan-400" /><span className="font-medium">Share Idea (Run AI)</span>
               </button>
-              <button onClick={() => { setShowPollCreator(true); setActionMenuOpen(false); }} className="action-menu-item w-full">
-                <BarChart3 className="w-4 h-4 text-violet-400" /><span>Create Poll</span>
+              <button onClick={() => { setShowPollCreator(true); setActionMenuOpen(false); }} className="action-menu-item w-full py-3">
+                <BarChart3 className="w-4 h-4 text-violet-400" /><span className="font-medium">Create Poll</span>
               </button>
               <button onClick={() => {
                 const input = document.createElement("input");
@@ -617,23 +626,25 @@ export default function ChatTimeline({
                   }
                 };
                 input.click();
-              }} className="action-menu-item w-full">
-                <FileUp className="w-4 h-4 text-amber-400" /><span>Upload File</span>
+              }} className="action-menu-item w-full py-3">
+                <FileUp className="w-4 h-4 text-amber-400" /><span className="font-medium">Upload File</span>
               </button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setActionMenuOpen(p => !p)}
-            className={`btn-icon shrink-0 ${actionMenuOpen ? "bg-[var(--accent-violet)]/10 border-[var(--accent-violet)]/30 text-[var(--accent-violet)]" : ""}`}>
-            {actionMenuOpen ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all shrink-0 ${actionMenuOpen ? "bg-[var(--accent-violet)] text-white shadow-md shadow-violet-500/20" : "bg-white/5 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text-primary)]"}`}>
+            {actionMenuOpen ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
           </motion.button>
-          <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} placeholder="Type a message..." className="input-dark flex-1 py-2.5 text-sm" />
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleSend} disabled={!inputText.trim()}
-            className={`btn-icon shrink-0 ${inputText.trim() ? "bg-[var(--accent-violet)] border-[var(--accent-violet)] text-white" : ""}`}>
-            <Send className="w-4 h-4" />
-          </motion.button>
+          <div className="flex-1 relative">
+            <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} placeholder="Type a message..." className="input-dark w-full py-3 pl-4 pr-12 text-sm shadow-inner rounded-xl" />
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleSend} disabled={!inputText.trim()}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${inputText.trim() ? "bg-[var(--accent-violet)] text-white shadow-md shadow-violet-500/30" : "text-[var(--text-muted)] hover:bg-white/5"}`}>
+              <Send className="w-4 h-4 ml-0.5" />
+            </motion.button>
+          </div>
         </div>
       </div>
     </div>

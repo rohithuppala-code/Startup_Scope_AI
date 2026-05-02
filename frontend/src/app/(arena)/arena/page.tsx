@@ -109,10 +109,10 @@ export default function ArenaFeedPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       {/* ─── Header ─── */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">Global Feed</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-0.5">
+          <h1 className="text-2xl font-bold gradient-text tracking-tight">Global Feed</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
             Battle-test ideas with the community
           </p>
         </div>
@@ -138,13 +138,13 @@ export default function ArenaFeedPage() {
 
       {/* ─── Composer ─── */}
       <motion.div
-        className="composer p-4 mb-6"
+        className="composer p-4 mb-8"
         layout
       >
         {!showComposer ? (
           <button
             onClick={() => setShowComposer(true)}
-            className="w-full text-left text-[var(--text-muted)] text-sm hover:text-[var(--text-secondary)] transition-colors py-1"
+            className="w-full text-left text-[var(--text-muted)] text-sm hover:text-[var(--text-secondary)] transition-colors py-1.5"
           >
             💡 What are you building? Share an idea for AI validation...
           </button>
@@ -152,7 +152,7 @@ export default function ArenaFeedPage() {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            className="space-y-3"
+            className="space-y-4"
           >
             {/* Title */}
             <input
@@ -160,7 +160,7 @@ export default function ArenaFeedPage() {
               value={composerTitle}
               onChange={(e) => setComposerTitle(e.target.value)}
               placeholder="Give your idea a title..."
-              className="w-full bg-transparent text-lg font-semibold text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+              className="w-full bg-transparent text-lg font-semibold text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none tracking-tight"
             />
 
             {/* Description */}
@@ -169,7 +169,7 @@ export default function ArenaFeedPage() {
               onChange={(e) => setComposerText(e.target.value)}
               placeholder="Describe your startup idea in detail. Our AI will analyze competitors, pricing, market sentiment, and more..."
               rows={4}
-              className="w-full bg-transparent text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-muted)] outline-none resize-none"
+              className="w-full bg-transparent text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-muted)] outline-none resize-none leading-relaxed"
               autoFocus
             />
 
@@ -183,7 +183,7 @@ export default function ArenaFeedPage() {
             />
 
             {/* Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">
+            <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
               <div className="flex items-center gap-2">
                 <button className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5">
                   <BarChart3 className="w-3.5 h-3.5" />
@@ -223,7 +223,7 @@ export default function ArenaFeedPage() {
       </motion.div>
 
       {/* ─── Feed ─── */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         <AnimatePresence mode="popLayout">
           {posts.map((post, i) => {
             // Detect if this is a live streaming card
@@ -273,7 +273,7 @@ export default function ArenaFeedPage() {
 
         {/* Loading more */}
         {loading && (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-10">
             <Loader2 className="w-6 h-6 text-[var(--accent-violet)] animate-spin" />
           </div>
         )}
@@ -284,13 +284,13 @@ export default function ArenaFeedPage() {
         {/* Empty state */}
         {!loading && posts.length === 0 && (
           <div className="text-center py-20">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-4 border border-[var(--border-subtle)]">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-5 border border-[var(--border-subtle)]">
               <Sparkles className="w-8 h-8 text-[var(--text-muted)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1.5 tracking-tight">
               The Arena awaits
             </h3>
-            <p className="text-sm text-[var(--text-secondary)] max-w-xs mx-auto">
+            <p className="text-sm text-[var(--text-secondary)] max-w-xs mx-auto leading-relaxed">
               Be the first to share an idea and get it validated by our AI pipeline.
             </p>
           </div>

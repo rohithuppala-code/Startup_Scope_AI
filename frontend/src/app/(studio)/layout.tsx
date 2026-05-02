@@ -10,7 +10,7 @@ export default function StudioLayout({
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       {/* Top Nav */}
-      <header className="sticky top-0 z-50 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 header-accent bg-[var(--bg-primary)]/85 backdrop-blur-2xl">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 h-14">
           <div className="flex items-center gap-3">
             <Link
@@ -21,11 +21,11 @@ export default function StudioLayout({
               Nexus
             </Link>
             <div className="w-px h-5 bg-[var(--border-subtle)]" />
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
-                <Zap className="w-3.5 h-3.5 text-white" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 via-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <Zap className="w-4 h-4 text-white" />
               </div>
-              <span className="font-semibold text-sm">The Studio</span>
+              <span className="font-bold text-sm tracking-tight">The Studio</span>
             </div>
           </div>
         </div>

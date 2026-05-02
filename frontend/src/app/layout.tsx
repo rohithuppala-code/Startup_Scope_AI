@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthGuard } from "@/components/AuthGuard";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -9,20 +8,19 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "StartupScope AI — Validate Ideas, Join The Arena",
-  description:
-    "AI-powered startup idea validation with real-time community feedback. Run private analysis in The Studio or battle-test ideas in The Arena.",
+  title: "StartupScope AI",
+  description: "AI Validation Engine & Compute-Driven Social Network",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <AuthGuard>{children}</AuthGuard>
+      <body className={`${inter.variable} antialiased font-sans`}>
+        {children}
       </body>
     </html>
   );

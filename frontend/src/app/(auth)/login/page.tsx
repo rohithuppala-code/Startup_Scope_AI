@@ -37,51 +37,66 @@ export default function LoginPage() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
+      transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
       className="relative z-10 w-full max-w-md px-4"
     >
-      <div className="glass-card p-8">
+      <div className="glass-card noise-overlay p-8 md:p-10 shadow-2xl">
         {/* Logo */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-cyan-500 flex items-center justify-center">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.5 }}
+          className="flex items-center gap-3 mb-8"
+        >
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">
+            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
               StartupScope
             </h1>
-            <p className="text-xs text-[var(--text-muted)]">AI Validation Engine</p>
+            <p className="text-xs text-[var(--text-muted)] tracking-wide">AI Validation Engine</p>
           </div>
-        </div>
+        </motion.div>
 
-        <h2 className="text-2xl font-bold mb-1 gradient-text">
-          {mode === "login" ? "Welcome back" : "Create account"}
-        </h2>
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          {mode === "login"
-            ? "Sign in to access The Studio & The Arena"
-            : "Join the Compute-Driven Social Network"}
-        </p>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+        >
+          <h2 className="text-2xl font-bold mb-1 gradient-text tracking-tight">
+            {mode === "login" ? "Welcome back" : "Create account"}
+          </h2>
+          <p className="text-sm text-[var(--text-secondary)] mb-8">
+            {mode === "login"
+              ? "Sign in to access The Studio & The Arena"
+              : "Join the Compute-Driven Social Network"}
+          </p>
+        </motion.div>
 
         {error && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm"
+            className="flex items-center gap-2 p-3 mb-5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm"
           >
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </motion.div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {/* Registration-only fields */}
           {mode === "register" && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                transition={{ duration: 0.3 }}
+              >
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Full Name
                 </label>
                 <input
@@ -91,9 +106,13 @@ export default function LoginPage() {
                   className="input-dark"
                   placeholder="John Doe"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                transition={{ duration: 0.3, delay: 0.05 }}
+              >
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Username
                 </label>
                 <input
@@ -104,13 +123,13 @@ export default function LoginPage() {
                   placeholder="johndoe"
                   maxLength={28}
                 />
-                <p className="text-[10px] text-[var(--text-muted)] mt-1">Letters, numbers, underscores only</p>
-              </div>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1.5">Letters, numbers, underscores only</p>
+              </motion.div>
             </>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Email
             </label>
             <input
@@ -123,7 +142,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               Password
             </label>
             <input
@@ -139,7 +158,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+            className="btn-primary w-full flex items-center justify-center gap-2 mt-3 py-3 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -158,7 +177,7 @@ export default function LoginPage() {
         </form>
 
         {/* Toggle between login and register */}
-        <div className="mt-6 pt-4 border-t border-[var(--border-subtle)] text-center">
+        <div className="mt-8 pt-5 border-t border-[var(--border-subtle)] text-center">
           <p className="text-sm text-[var(--text-secondary)]">
             {mode === "login" ? "Don't have an account?" : "Already have an account?"}
             <button
@@ -167,7 +186,7 @@ export default function LoginPage() {
                 setMode(mode === "login" ? "register" : "login");
                 setError("");
               }}
-              className="ml-1.5 text-[var(--accent-violet)] font-medium hover:underline"
+              className="ml-1.5 text-[var(--accent-violet)] font-semibold hover:underline transition-colors"
             >
               {mode === "login" ? "Sign up" : "Sign in"}
             </button>

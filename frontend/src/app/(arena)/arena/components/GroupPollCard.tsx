@@ -10,9 +10,11 @@ export function GroupPollCard({ payload, messageId, votes, onVote, currentUserId
   const myVote = votes.find((v: any) => v.user_id === currentUserId)?.option_idx;
 
   return (
-    <div className="w-[300px] max-w-full glass-card p-3 pointer-events-auto border-violet-500/30 border">
-      <div className="flex items-center gap-2 mb-3">
-        <BarChart3 className="w-4 h-4 text-violet-400" />
+    <div className="w-[300px] max-w-full glass-card p-4 pointer-events-auto">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+          <BarChart3 className="w-4 h-4 text-[var(--accent-violet)]" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)] leading-tight">{payload.question}</h3>
       </div>
       
@@ -26,30 +28,41 @@ export function GroupPollCard({ payload, messageId, votes, onVote, currentUserId
             <button
               key={i}
               onClick={() => onVote(i)}
-              className={`w-full relative overflow-hidden rounded-lg p-2.5 text-left transition-all ${
-                isSelected ? "bg-violet-500/20 border border-violet-500/40" : "bg-black/20 hover:bg-black/40 border border-transparent"
+              className={`w-full relative overflow-hidden rounded-xl p-3 text-left transition-all ${
+                isSelected 
+                  ? "bg-[var(--accent-violet)]/10 border border-[var(--accent-violet)]/40 shadow-[0_0_12px_rgba(139,92,246,0.1)]" 
+                  : "bg-black/20 hover:bg-black/40 border border-[var(--border-subtle)] hover:border-white/10"
               }`}
             >
               <div
-                className="absolute inset-0 bg-violet-500/10 origin-left transition-transform duration-500 ease-out"
+                className="absolute inset-0 bg-gradient-to-r from-[var(--accent-violet)]/15 to-[var(--accent-violet)]/5 origin-left transition-transform duration-700 ease-out"
                 style={{ transform: `scaleX(${percentage / 100})` }}
               />
               <div className="relative flex items-center justify-between z-10">
-                <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-violet-400 bg-violet-400 text-white" : "border-[var(--border-subtle)]"}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                    isSelected 
+                      ? "border-[var(--accent-violet)] bg-[var(--accent-violet)] text-white" 
+                      : "border-[var(--text-muted)] bg-transparent"
+                  }`}>
                     {isSelected && <Check className="w-3 h-3" />}
                   </div>
-                  <span className="text-sm text-[var(--text-primary)]">{opt}</span>
+                  <span className={`text-sm font-medium ${isSelected ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>
+                    {opt}
+                  </span>
                 </div>
-                <span className="text-xs text-[var(--text-muted)] font-medium">{percentage}%</span>
+                <span className={`text-xs font-bold tabular-nums ${isSelected ? "text-[var(--accent-violet)]" : "text-[var(--text-muted)]"}`}>
+                  {percentage}%
+                </span>
               </div>
             </button>
           );
         })}
       </div>
       
-      <div className="mt-3 text-[10px] text-[var(--text-muted)] text-right">
-        {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+      <div className="mt-4 pt-3 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-muted)] flex justify-between items-center">
+        <span>Public Poll</span>
+        <span className="font-medium">{totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}</span>
       </div>
     </div>
   );

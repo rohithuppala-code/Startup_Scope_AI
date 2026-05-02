@@ -74,10 +74,10 @@ export default function FounderCard({
   if (compact) {
     return (
       <motion.div
-        whileHover={{ x: 2 }}
-        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/[0.02] transition-colors cursor-pointer"
+        whileHover={{ x: 2, backgroundColor: "rgba(255, 255, 255, 0.03)" }}
+        className="flex items-center gap-3 p-2.5 rounded-xl transition-all cursor-pointer border border-transparent hover:border-[var(--border-subtle)]"
       >
-        <div className="avatar avatar-sm">
+        <div className="avatar avatar-sm shadow-md">
           {avatarUrl ? (
             <img src={avatarUrl} alt={username} />
           ) : (
@@ -85,13 +85,13 @@ export default function FounderCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate text-[var(--text-primary)]">
+          <p className="text-[13px] font-semibold truncate text-[var(--text-primary)]">
             {displayName || username}
           </p>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[var(--text-muted)]">@{username}</span>
-            <span className="text-[10px] text-amber-400 font-medium">
-              <Star className="w-2.5 h-2.5 inline" /> {karmaScore}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[11px] text-[var(--text-muted)]">@{username}</span>
+            <span className="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-1.5 py-0.5 rounded flex items-center">
+              <Star className="w-2.5 h-2.5 inline mr-0.5" /> {karmaScore}
             </span>
           </div>
         </div>
@@ -99,10 +99,10 @@ export default function FounderCard({
           <button
             onClick={handleFollowClick}
             disabled={loading}
-            className={`text-[10px] px-2.5 py-1 rounded-lg font-medium transition-colors ${
+            className={`text-[11px] px-3 py-1.5 rounded-lg font-semibold transition-all ${
               isFollowing
-                ? "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10"
-                : "bg-[var(--accent-violet)]/10 text-[var(--accent-violet)] hover:bg-[var(--accent-violet)]/20"
+                ? "bg-white/10 text-[var(--text-primary)] hover:bg-white/20 border border-[var(--border-subtle)]"
+                : "bg-[var(--accent-violet)] text-white hover:brightness-110 shadow-[0_2px_8px_rgba(139,92,246,0.3)]"
             }`}
           >
             {isFollowing ? "Following" : "Follow"}
@@ -116,10 +116,10 @@ export default function FounderCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card glass-card-hover p-5"
+      className="glass-card glass-card-hover p-6"
     >
       <div className="flex items-start gap-4">
-        <div className="avatar avatar-lg">
+        <div className="avatar avatar-lg shadow-lg shadow-violet-500/20">
           {avatarUrl ? (
             <img src={avatarUrl} alt={username} />
           ) : (
@@ -128,36 +128,36 @@ export default function FounderCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <h3 className="font-semibold text-base text-[var(--text-primary)] truncate">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-bold text-lg text-[var(--text-primary)] truncate tracking-tight">
               {displayName || username}
             </h3>
             {badges.length > 0 && (
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-md border border-[var(--border-subtle)]">
                 {badges.slice(0, 3).map((badge) => (
-                  <span key={badge} className="text-xs" title={badge}>
+                  <span key={badge} className="text-[13px]" title={badge}>
                     {badge === "first_post" ? "🌱" : badge === "serial_builder" ? "🏗️" : badge === "karma_100" ? "⚡" : badge === "karma_500" ? "🚀" : "👍"}
                   </span>
                 ))}
               </div>
             )}
           </div>
-          <p className="text-xs text-[var(--accent-violet)] font-medium mb-1.5">@{username}</p>
+          <p className="text-[13px] text-[var(--accent-violet)] font-semibold mb-2.5">@{username}</p>
           {bio && (
-            <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mb-3">{bio}</p>
+            <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mb-4 leading-relaxed">{bio}</p>
           )}
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-xs">
-              <Star className="w-3 h-3 text-amber-400" />
-              <span className="font-bold text-amber-400">{karmaScore}</span>
-              <span className="text-[var(--text-muted)]">karma</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 text-xs bg-amber-400/10 px-2.5 py-1 rounded-md border border-amber-400/20">
+              <Star className="w-3.5 h-3.5 text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.5)]" />
+              <span className="font-extrabold text-amber-400">{karmaScore}</span>
+              <span className="text-[var(--text-muted)] font-medium">karma</span>
             </div>
             {localFollowerCount > 0 && (
-              <div className="flex items-center gap-1 text-xs">
-                <Users2 className="w-3 h-3 text-cyan-400" />
-                <span className="font-bold text-cyan-400">{localFollowerCount}</span>
-                <span className="text-[var(--text-muted)]">followers</span>
+              <div className="flex items-center gap-1.5 text-xs bg-cyan-400/10 px-2.5 py-1 rounded-md border border-cyan-400/20">
+                <Users2 className="w-3.5 h-3.5 text-cyan-400 drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" />
+                <span className="font-extrabold text-cyan-400">{localFollowerCount}</span>
+                <span className="text-[var(--text-muted)] font-medium">followers</span>
               </div>
             )}
           </div>
@@ -165,13 +165,15 @@ export default function FounderCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[var(--border-subtle)]">
+      <div className="flex items-center gap-3 mt-5 pt-4 border-t border-[var(--border-subtle)]">
         {currentUserId !== id && (
           <button
             onClick={handleFollowClick}
             disabled={loading}
-            className={`text-xs py-2 px-4 flex-1 transition-colors ${
-              isFollowing ? "bg-white/5 text-[var(--text-secondary)] rounded-lg hover:bg-white/10" : "btn-primary"
+            className={`text-sm py-2 px-5 flex-1 font-semibold transition-all ${
+              isFollowing 
+                ? "bg-white/5 text-[var(--text-primary)] rounded-lg hover:bg-white/10 border border-[var(--border-subtle)]" 
+                : "btn-primary shadow-[0_2px_12px_rgba(139,92,246,0.25)]"
             }`}
           >
             {isFollowing ? "Following" : "Follow"}
@@ -180,7 +182,7 @@ export default function FounderCard({
         {onMessage && (
           <button
             onClick={() => onMessage(id)}
-            className="btn-ghost text-xs py-2 px-4 flex-1"
+            className="btn-ghost text-sm py-2 px-5 flex-1 font-semibold"
           >
             Message
           </button>

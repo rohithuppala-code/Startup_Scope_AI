@@ -89,22 +89,22 @@ export default function GroupsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto px-5 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">Groups</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-            Join founder communities and collaborate on ideas
+          <h1 className="text-3xl font-bold gradient-text tracking-tight mb-2">Groups</h1>
+          <p className="text-[15px] font-medium text-[var(--text-secondary)] leading-relaxed">
+            Join founder communities and collaborate on ideas.
           </p>
         </div>
         <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => setShowCreateModal(true)}
-          className="btn-primary text-xs flex items-center gap-1.5"
+          className="btn-primary text-sm py-2.5 px-5 flex items-center gap-2 font-semibold shadow-md shadow-violet-500/20"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-4 h-4" />
           Create Group
         </motion.button>
       </div>
@@ -116,29 +116,29 @@ export default function GroupsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4"
             onClick={() => setShowCreateModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="glass-card p-6 w-full max-w-md glow-border"
+              className="glass-card noise-overlay p-8 w-full max-w-md shadow-2xl border-violet-500/30"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-[var(--text-primary)]">Create Group</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Create Group</h3>
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="btn-icon"
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5 text-[var(--text-muted)]" />
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                     Group Name
                   </label>
                   <input
@@ -146,29 +146,29 @@ export default function GroupsPage() {
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                     placeholder="e.g. SaaS Builders, Deep Tech..."
-                    className="input-dark"
+                    className="input-dark py-3"
                     autoFocus
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  <label className="block text-sm font-semibold text-[var(--text-secondary)] mb-2">
                     Description
                   </label>
                   <textarea
                     value={newGroupDescription}
                     onChange={(e) => setNewGroupDescription(e.target.value)}
                     placeholder="What's this group about?"
-                    className="input-dark"
+                    className="input-dark py-3 resize-y"
                     rows={3}
                   />
                 </div>
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-3 pt-4">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={createGroup}
                     disabled={!newGroupName.trim() || creating}
-                    className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="btn-primary py-3 flex-1 flex items-center justify-center gap-2 font-semibold shadow-md disabled:opacity-50"
                   >
                     {creating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -181,7 +181,7 @@ export default function GroupsPage() {
                   </motion.button>
                   <button
                     onClick={() => setShowCreateModal(false)}
-                    className="btn-ghost flex-1"
+                    className="btn-ghost py-3 flex-1 font-semibold border-transparent hover:bg-white/5"
                   >
                     Cancel
                   </button>
@@ -194,96 +194,96 @@ export default function GroupsPage() {
 
       {/* Groups Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="glass-card p-6 animate-pulse">
-              <div className="skeleton h-12 w-12 rounded-xl mb-3" />
-              <div className="skeleton h-5 w-40 mb-2" />
-              <div className="skeleton h-3 w-full mb-1" />
+              <div className="skeleton h-14 w-14 rounded-2xl mb-4" />
+              <div className="skeleton h-6 w-48 mb-3" />
+              <div className="skeleton h-3 w-full mb-1.5" />
               <div className="skeleton h-3 w-2/3" />
             </div>
           ))}
         </div>
       ) : hubs.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-4 border border-[var(--border-subtle)]">
-            <Users2 className="w-8 h-8 text-[var(--text-muted)]" />
+        <div className="text-center py-24">
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-6 border border-[var(--border-subtle)] shadow-xl shadow-violet-500/5">
+            <Users2 className="w-10 h-10 text-[var(--text-muted)]" />
           </div>
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+          <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight">
             No groups yet
           </h3>
-          <p className="text-sm text-[var(--text-secondary)] mb-4">
+          <p className="text-base text-[var(--text-secondary)] mb-6">
             Be the first to create a founder community!
           </p>
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => setShowCreateModal(true)}
-            className="btn-primary text-sm"
+            className="btn-primary text-base py-3 px-6 font-semibold shadow-md"
           >
-            <Plus className="w-4 h-4 inline mr-1" />
+            <Plus className="w-5 h-5 inline mr-2" />
             Create First Group
           </motion.button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {hubs.map((hub, i) => (
             <motion.div
               key={hub.id}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="glass-card glass-card-hover p-5"
+              className="glass-card glass-card-hover p-6 border-[var(--border-subtle)] hover:border-violet-500/30"
             >
-              <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-xl font-bold text-white shrink-0 shadow-lg shadow-violet-500/20">
+              <div className="flex items-start gap-5">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-purple-500 to-cyan-500 flex items-center justify-center text-2xl font-bold text-white shrink-0 shadow-lg shadow-violet-500/25">
                   {hub.icon_url ? (
-                    <img src={hub.icon_url} alt="" className="w-full h-full object-cover rounded-xl" />
+                    <img src={hub.icon_url} alt="" className="w-full h-full object-cover rounded-2xl" />
                   ) : (
                     hub.name.charAt(0).toUpperCase()
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-base text-[var(--text-primary)] mb-1">
+                  <h3 className="font-bold text-lg text-[var(--text-primary)] mb-1.5 tracking-tight truncate">
                     {hub.name}
                   </h3>
                   {hub.description && (
-                    <p className="text-xs text-[var(--text-secondary)] line-clamp-2 mb-3">
+                    <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mb-4 leading-relaxed">
                       {hub.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1">
-                      <Users2 className="w-3 h-3" />
+                  <div className="flex items-center gap-4 text-[13px] font-medium text-[var(--text-muted)]">
+                    <span className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
+                      <Users2 className="w-4 h-4 text-[var(--accent-violet)]" />
                       {hub.member_count} members
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Hash className="w-3 h-3" />
+                    <span className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
+                      <Hash className="w-4 h-4 text-cyan-400" />
                       {hub.channel_count} channels
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[var(--border-subtle)]">
+              <div className="flex items-center gap-3 mt-6 pt-4 border-t border-[var(--border-subtle)]">
                 <motion.button
                   whileHover={joinedHubs.has(hub.id) ? {} : { scale: 1.02 }}
                   whileTap={joinedHubs.has(hub.id) ? {} : { scale: 0.98 }}
                   onClick={() => !joinedHubs.has(hub.id) && joinHub(hub.id)}
                   disabled={joinedHubs.has(hub.id)}
-                  className={`text-xs py-2 px-4 flex-1 transition-colors ${
+                  className={`text-sm font-semibold py-2.5 px-5 flex-1 transition-all ${
                     joinedHubs.has(hub.id) 
-                      ? "bg-[var(--accent-violet)]/20 text-[var(--accent-violet)] border border-[var(--accent-violet)]/30 rounded-lg cursor-default" 
-                      : "btn-primary"
+                      ? "bg-[var(--accent-violet)]/10 text-[var(--accent-violet)] border border-[var(--accent-violet)]/20 rounded-xl cursor-default" 
+                      : "btn-primary shadow-[0_2px_12px_rgba(139,92,246,0.25)]"
                   }`}
                 >
                   {joinedHubs.has(hub.id) ? "Joined" : "Join Group"}
                 </motion.button>
                 <Link
                   href={`/arena/groups/${hub.id}`}
-                  className="btn-ghost text-xs py-2 px-4 flex items-center gap-1"
+                  className="btn-ghost text-sm font-semibold py-2.5 px-5 flex items-center justify-center gap-2 flex-1 border-transparent bg-white/5 hover:bg-white/10"
                 >
                   Open
-                  <ArrowRight className="w-3 h-3" />
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
             </motion.div>

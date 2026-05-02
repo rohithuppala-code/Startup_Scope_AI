@@ -196,28 +196,36 @@ export default function StudioPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
+            className="space-y-8"
           >
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold mb-2 gradient-text">
+            <div className="text-center mb-10">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 via-purple-500 to-indigo-600 flex items-center justify-center mx-auto mb-5 shadow-xl shadow-violet-500/20"
+              >
+                <Sparkles className="w-7 h-7 text-white" />
+              </motion.div>
+              <h1 className="text-3xl md:text-4xl font-bold mb-3 gradient-text tracking-tight">
                 Validate Your Idea
               </h1>
-              <p className="text-[var(--text-secondary)]">
+              <p className="text-[var(--text-secondary)] text-lg max-w-md mx-auto leading-relaxed">
                 Describe your startup idea and let our AI agents analyze it in
                 real-time.
               </p>
             </div>
 
             {isFailed && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+              <div className="flex items-center gap-2 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
                 <XCircle className="w-4 h-4" />
                 Validation failed. Please try again.
               </div>
             )}
 
-            <div className="glass-card p-6 space-y-4">
+            <div className="glass-card noise-overlay p-8 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Your Idea *
                 </label>
                 <textarea
@@ -226,13 +234,13 @@ export default function StudioPage() {
                   className="input-dark min-h-[120px] resize-y glow-border"
                   placeholder="Describe your startup idea in detail — what problem it solves, who it's for, and how it works..."
                 />
-                <p className="text-xs text-[var(--text-muted)] mt-1">
+                <p className="text-xs text-[var(--text-muted)] mt-1.5 tabular-nums">
                   {idea.length}/2000 characters
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Target Market
                   </label>
                   <input
@@ -243,7 +251,7 @@ export default function StudioPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Budget
                   </label>
                   <input
@@ -257,7 +265,7 @@ export default function StudioPage() {
               <button
                 onClick={handleSubmit}
                 disabled={idea.trim().length < 10 || submitting}
-                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-40"
+                className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-40"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -278,25 +286,25 @@ export default function StudioPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-4"
+          className="space-y-5"
         >
           {/* Status Bar */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               {isActive && (
-                <div className="flex items-center gap-2 text-sm text-[var(--accent-violet)]">
+                <div className="flex items-center gap-2.5 text-sm text-[var(--accent-violet)]">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{comparing ? "Running Head-to-Head Comparison..." : "Analyzing your idea…"}</span>
+                  <span className="font-medium">{comparing ? "Running Head-to-Head Comparison..." : "Analyzing your idea…"}</span>
                 </div>
               )}
               {isDone && (
-                <div className="flex items-center gap-2 text-sm text-[var(--accent-emerald)]">
+                <div className="flex items-center gap-2.5 text-sm text-[var(--accent-emerald)]">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Validation Complete</span>
+                  <span className="font-medium">Validation Complete</span>
                 </div>
               )}
             </div>
-            <span className="text-xs text-[var(--text-muted)]">
+            <span className="text-xs text-[var(--text-muted)] tabular-nums">
               {sections.length} sections loaded
             </span>
           </div>
@@ -314,7 +322,7 @@ export default function StudioPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="glass-card p-4 flex items-center justify-center gap-3 mt-6"
+              className="glass-card p-5 flex items-center justify-center gap-3 mt-8 flex-wrap"
             >
               <button onClick={handleExport} className="btn-ghost flex items-center gap-2">
                 <FileDown className="w-4 h-4" />
@@ -351,24 +359,24 @@ export default function StudioPage() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden mt-4"
+                className="overflow-hidden mt-5"
               >
-                <div className="glass-card p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center">
-                      <MessageCircle className="w-4 h-4 text-cyan-400" />
+                <div className="glass-card noise-overlay p-6">
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <div className="w-9 h-9 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+                      <MessageCircle className="w-4.5 h-4.5 text-cyan-400" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-sm">Ask Your Report</h3>
+                      <h3 className="font-semibold text-sm tracking-tight">Ask Your Report</h3>
                       <p className="text-[10px] text-[var(--text-muted)]">Ask follow-up questions grounded in your AI analysis</p>
                     </div>
-                    <button onClick={() => setShowRagChat(false)} className="ml-auto p-1 rounded-lg hover:bg-white/5">
+                    <button onClick={() => setShowRagChat(false)} className="ml-auto p-1.5 rounded-lg hover:bg-white/5 transition-colors">
                       <X className="w-4 h-4 text-[var(--text-muted)]" />
                     </button>
                   </div>
 
                   {/* Messages */}
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto mb-4 scroll-smooth">
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto mb-5 scroll-smooth">
                     {ragMessages.length === 0 && (
                       <div className="text-center py-8">
                         <Sparkles className="w-6 h-6 text-cyan-400/50 mx-auto mb-2" />
@@ -378,7 +386,7 @@ export default function StudioPage() {
                             <button
                               key={q}
                               onClick={() => { setRagInput(q); }}
-                              className="text-[10px] px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors"
+                              className="text-[10px] px-3 py-1.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors"
                             >
                               {q}
                             </button>
@@ -390,7 +398,7 @@ export default function StudioPage() {
                       <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
                           msg.role === "user"
-                            ? "bg-[var(--accent-violet)] text-white rounded-br-md"
+                            ? "bg-[var(--accent-violet)] text-white rounded-br-md shadow-md shadow-violet-500/20"
                             : "bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-bl-md"
                         }`}>
                           <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
@@ -422,7 +430,7 @@ export default function StudioPage() {
                     <button
                       onClick={handleRagSend}
                       disabled={!ragInput.trim() || ragLoading}
-                      className={`btn-icon shrink-0 ${ragInput.trim() ? "bg-cyan-500 border-cyan-500 text-white" : ""}`}
+                      className={`btn-icon shrink-0 ${ragInput.trim() ? "bg-cyan-500 border-cyan-500 text-white shadow-md shadow-cyan-500/20" : ""}`}
                     >
                       <Send className="w-4 h-4" />
                     </button>
@@ -447,22 +455,22 @@ export default function StudioPage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="glass-card p-6 w-full max-w-md mx-4"
+              className="glass-card noise-overlay p-7 w-full max-w-md mx-4"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">Publish to Arena</h3>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold tracking-tight">Publish to Arena</h3>
                 <button
                   onClick={() => setShowPublish(false)}
-                  className="p-1 rounded-lg hover:bg-white/5"
+                  className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   <X className="w-4 h-4 text-[var(--text-muted)]" />
                 </button>
               </div>
-              <p className="text-sm text-[var(--text-secondary)] mb-4">
+              <p className="text-sm text-[var(--text-secondary)] mb-5 leading-relaxed">
                 Give your idea a catchy title and tags so the community can find
                 it.
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <input
                   value={publishTitle}
                   onChange={(e) => setPublishTitle(e.target.value)}
@@ -479,7 +487,7 @@ export default function StudioPage() {
                 <button
                   onClick={handlePublish}
                   disabled={!publishTitle.trim() || publishing}
-                  className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-40"
+                  className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-40"
                 >
                   {publishing ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -530,13 +538,13 @@ function ReportSection({ section, index }: { section: WSSection; index: number }
       initial={{ opacity: 0, y: 20, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, delay: index * 0.05 }}
-      className="glass-card p-6"
+      className="glass-card card-shine p-7"
     >
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
-          <Icon className="w-4.5 h-4.5 text-[var(--accent-violet)]" />
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
+          <Icon className="w-5 h-5 text-[var(--accent-violet)]" />
         </div>
-        <h3 className="font-semibold text-lg">{label}</h3>
+        <h3 className="font-semibold text-lg tracking-tight">{label}</h3>
       </div>
       <div className="text-sm text-[var(--text-secondary)] leading-relaxed space-y-3">
         {typeof section.data === "string" ? (
@@ -597,10 +605,10 @@ function ReportDataRenderer({ data }: { data: Record<string, unknown> }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {entries.map(([key, value]) => (
         <div key={key}>
-          <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1">{formatKey(key)}</p>
+          <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">{formatKey(key)}</p>
           <div className="text-sm text-[var(--text-secondary)]">{renderValue(value)}</div>
         </div>
       ))}

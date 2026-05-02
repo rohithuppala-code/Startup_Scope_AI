@@ -86,19 +86,21 @@ export default function ExplorePage() {
   );
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-2xl mx-auto px-5 py-8">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold gradient-text mb-1">Explore</h1>
-        <p className="text-sm text-[var(--text-secondary)]">
-          Discover ideas by market gap and connect with founders
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold gradient-text tracking-tight mb-2">Explore</h1>
+        <p className="text-[15px] font-medium text-[var(--text-secondary)] leading-relaxed">
+          Discover ideas by market gap and connect with top founders in the ecosystem.
         </p>
       </div>
 
       {/* Search Bar */}
-      <div className="composer p-4 mb-4">
-        <div className="flex items-center gap-3">
-          <Search className="w-5 h-5 text-[var(--text-muted)] shrink-0" />
+      <div className="glass-card p-5 mb-5 shadow-lg bg-black/10">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-[var(--bg-glass)] flex items-center justify-center shrink-0 border border-[var(--border-subtle)]">
+            <Search className="w-5 h-5 text-[var(--text-muted)]" />
+          </div>
           <input
             type="text"
             value={query}
@@ -106,18 +108,18 @@ export default function ExplorePage() {
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder={
               searchType === "posts"
-                ? "Search ideas by keyword, market gap..."
-                : "Search founders by username..."
+                ? "Search ideas by keyword, market gap, or technology..."
+                : "Search founders by username or display name..."
             }
-            className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+            className="flex-1 bg-transparent text-base font-medium text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/70 outline-none"
             autoFocus
           />
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             onClick={handleSearch}
             disabled={!query.trim() || loading}
-            className="btn-primary text-xs py-2 px-4"
+            className="btn-primary text-sm py-2.5 px-6 font-semibold shadow-md disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -129,19 +131,19 @@ export default function ExplorePage() {
       </div>
 
       {/* Type Toggle */}
-      <div className="tab-bar mb-6 w-fit">
+      <div className="tab-bar mb-8 w-fit p-1 bg-black/20">
         <button
           onClick={() => setSearchType("posts")}
-          className={`tab-item ${searchType === "posts" ? "tab-item-active" : ""}`}
+          className={`tab-item py-2 px-5 font-semibold ${searchType === "posts" ? "tab-item-active shadow-md" : ""}`}
         >
-          <Sparkles className="w-3 h-3 inline mr-1" />
+          <Sparkles className="w-4 h-4 inline mr-2 text-[var(--accent-cyan)]" />
           Ideas
         </button>
         <button
           onClick={() => setSearchType("profiles")}
-          className={`tab-item ${searchType === "profiles" ? "tab-item-active" : ""}`}
+          className={`tab-item py-2 px-5 font-semibold ${searchType === "profiles" ? "tab-item-active shadow-md" : ""}`}
         >
-          <Users2 className="w-3 h-3 inline mr-1" />
+          <Users2 className="w-4 h-4 inline mr-2 text-[var(--accent-violet)]" />
           Founders
         </button>
       </div>
@@ -151,32 +153,35 @@ export default function ExplorePage() {
         {loading ? (
           <motion.div
             key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex justify-center py-12"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex flex-col items-center justify-center py-20"
           >
-            <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-violet)]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-violet)] mb-4" />
+            <p className="text-sm font-medium text-[var(--text-muted)]">Searching the Arena...</p>
           </motion.div>
         ) : hasSearched ? (
           <motion.div
             key="results"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
           >
             {/* Post Results */}
             {searchType === "posts" && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {postResults.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Search className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
+                  <div className="glass-card p-10 text-center border-dashed">
+                    <Search className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3 opacity-50" />
+                    <h3 className="text-base font-semibold text-[var(--text-primary)] tracking-tight mb-1">No ideas found</h3>
                     <p className="text-sm text-[var(--text-secondary)]">
-                      No ideas found for &ldquo;{query}&rdquo;
+                      No ideas matched your query &ldquo;<span className="text-[var(--text-primary)] font-medium">{query}</span>&rdquo;
                     </p>
                   </div>
                 ) : (
                   <>
-                    <p className="text-xs text-[var(--text-muted)] mb-2">
+                    <p className="text-sm font-semibold text-[var(--text-muted)] tracking-wider uppercase mb-2 ml-1">
                       {postResults.length} result{postResults.length !== 1 ? "s" : ""}
                     </p>
                     {postResults.map((post) => (
@@ -201,17 +206,18 @@ export default function ExplorePage() {
 
             {/* Profile Results */}
             {searchType === "profiles" && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {profileResults.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users2 className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
+                  <div className="glass-card p-10 text-center border-dashed">
+                    <Users2 className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3 opacity-50" />
+                    <h3 className="text-base font-semibold text-[var(--text-primary)] tracking-tight mb-1">No founders found</h3>
                     <p className="text-sm text-[var(--text-secondary)]">
-                      No founders found for &ldquo;{query}&rdquo;
+                      No profiles matched your query &ldquo;<span className="text-[var(--text-primary)] font-medium">{query}</span>&rdquo;
                     </p>
                   </div>
                 ) : (
                   <>
-                    <p className="text-xs text-[var(--text-muted)] mb-2">
+                    <p className="text-sm font-semibold text-[var(--text-muted)] tracking-wider uppercase mb-2 ml-1">
                       {profileResults.length} founder{profileResults.length !== 1 ? "s" : ""}
                     </p>
                     {profileResults.map((profile) => (
@@ -238,16 +244,16 @@ export default function ExplorePage() {
             key="discovery"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center py-16"
+            className="text-center py-20"
           >
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-4 border border-[var(--border-subtle)]">
-              <TrendingUp className="w-8 h-8 text-[var(--text-muted)]" />
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mx-auto mb-6 border border-[var(--border-subtle)] shadow-xl shadow-violet-500/5">
+              <TrendingUp className="w-10 h-10 text-[var(--text-muted)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight">
               Discover the ecosystem
             </h3>
-            <p className="text-sm text-[var(--text-secondary)] max-w-sm mx-auto">
-              Search for startup ideas by market gap, technology, or keyword. Find founders building in your space.
+            <p className="text-base text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed">
+              Search for startup ideas by market gap, technology, or keyword. Find founders building in your space and expand your network.
             </p>
           </motion.div>
         )}

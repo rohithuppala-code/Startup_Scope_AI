@@ -8,6 +8,7 @@ import {
   Loader2,
   UserPlus,
   Users2,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/stores/user-store";
@@ -110,27 +111,27 @@ export default function MessagesPage() {
   }, [userId]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-[var(--bg-primary)]">
       {/* ─── Conversations List ─── */}
       <div
-        className={`w-full md:w-[320px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col ${
+        className={`w-full md:w-[360px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col bg-black/10 backdrop-blur-sm z-10 ${
           selectedConv ? "hidden md:flex" : "flex"
         }`}
       >
         {/* Header */}
-        <div className="px-4 py-4 border-b border-[var(--border-subtle)]">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">Messages</h2>
+        <div className="px-5 py-5 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Messages</h2>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowNewDM(!showNewDM)}
-              className="btn-icon"
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${showNewDM ? "bg-[var(--accent-violet)] text-white shadow-md shadow-violet-500/20" : "bg-white/5 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text-primary)]"}`}
             >
               {showNewDM ? (
-                <span className="text-xs font-bold">✕</span>
+                <X className="w-4 h-4" />
               ) : (
-                <Plus className="w-4 h-4" />
+                <Plus className="w-5 h-5" />
               )}
             </motion.button>
           </div>
@@ -142,7 +143,7 @@ export default function MessagesPage() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden mb-3"
+                className="overflow-hidden mb-4"
               >
                 <div className="relative">
                   <div className="flex items-center gap-2">
@@ -151,16 +152,16 @@ export default function MessagesPage() {
                       value={newDMUsername}
                       onChange={(e) => setNewDMUsername(e.target.value)}
                       placeholder="Search founders by name..."
-                      className="input-dark text-sm py-2 flex-1"
+                      className="input-dark py-2.5 flex-1 text-sm shadow-inner"
                       autoFocus
                     />
                   </div>
                   {/* Search Results Dropdown */}
                   {(searchResults.length > 0 || searching) && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg shadow-xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto glow-border">
                       {searching ? (
-                        <div className="p-3 flex justify-center">
-                          <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-violet)]" />
+                        <div className="p-4 flex justify-center">
+                          <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-violet)]" />
                         </div>
                       ) : (
                         searchResults.map((p) => (
@@ -169,12 +170,12 @@ export default function MessagesPage() {
                             onClick={() => initNewDM(p)}
                             className="w-full flex items-center gap-3 p-3 text-left hover:bg-white/[0.05] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                           >
-                            <div className="avatar avatar-sm shrink-0">
+                            <div className="avatar avatar-sm shrink-0 shadow-sm">
                               {p.avatar_url ? <img src={p.avatar_url} alt="" /> : p.username.charAt(0).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-[var(--text-primary)] truncate">{p.display_name || p.username}</p>
-                              <p className="text-[10px] text-[var(--text-muted)] truncate">@{p.username} • ⚡{p.karma_score}</p>
+                              <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{p.display_name || p.username}</p>
+                              <p className="text-[11px] font-medium text-[var(--text-muted)] truncate">@{p.username} • <span className="text-amber-400 font-bold">⚡{p.karma_score}</span></p>
                             </div>
                           </button>
                         ))
@@ -187,34 +188,34 @@ export default function MessagesPage() {
           </AnimatePresence>
 
           {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+          <div className="relative group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--text-primary)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search conversations..."
-              className="input-dark text-sm py-2 pl-9"
+              className="input-dark text-sm py-2.5 pl-10 shadow-inner w-full"
             />
           </div>
         </div>
 
         {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-2">
           {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-violet)]" />
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-violet)]" />
             </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="text-center py-12 px-4">
-              <MessageCircle className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
-              <p className="text-sm text-[var(--text-secondary)]">No conversations yet</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Start a new DM by clicking the + button
+            <div className="text-center py-16 px-5 glass-card m-3 border-dashed">
+              <MessageCircle className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3 opacity-50" />
+              <p className="text-[15px] font-semibold text-[var(--text-primary)] tracking-tight">No conversations yet</p>
+              <p className="text-xs font-medium text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                Start a new DM by clicking the <strong className="text-[var(--text-secondary)]">+</strong> button above
               </p>
             </div>
           ) : (
-            <div className="py-1">
+            <div className="space-y-1">
               {filteredConversations.map((conv) => {
                 const isActive = selectedConv?.channel_id === conv.channel_id;
                 return (
@@ -222,13 +223,13 @@ export default function MessagesPage() {
                     key={conv.channel_id}
                     whileHover={{ x: 2 }}
                     onClick={() => setSelectedConv(conv)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left transition-all ${
                       isActive
-                        ? "bg-[var(--accent-violet)]/8 border-l-2 border-[var(--accent-violet)]"
-                        : "hover:bg-white/[0.02]"
+                        ? "bg-[var(--accent-violet)]/10 shadow-[inset_2px_0_0_0_rgba(139,92,246,1)]"
+                        : "hover:bg-white/[0.04] border border-transparent hover:border-[var(--border-subtle)]"
                     }`}
                   >
-                    <div className="avatar avatar-sm">
+                    <div className="avatar avatar-md shadow-sm">
                       {conv.participant_avatar ? (
                         <img src={conv.participant_avatar} alt="" />
                       ) : (
@@ -236,15 +237,15 @@ export default function MessagesPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      <p className={`text-[15px] truncate tracking-tight mb-0.5 ${isActive ? "font-bold text-[var(--text-primary)]" : "font-semibold text-[var(--text-secondary)]"}`}>
                         {conv.participant_username}
                       </p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
-                        {conv.last_message || "No messages yet"}
+                      <p className={`text-[13px] truncate ${isActive ? "text-[var(--text-secondary)]" : "text-[var(--text-muted)]"}`}>
+                        {conv.last_message || <span className="italic opacity-50">No messages yet</span>}
                       </p>
                     </div>
                     {conv.last_message_at && (
-                      <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                      <span className="text-[11px] font-medium text-[var(--text-muted)] shrink-0 bg-white/5 px-2 py-1 rounded-md">
                         {new Date(conv.last_message_at).toLocaleDateString()}
                       </span>
                     )}
@@ -260,7 +261,7 @@ export default function MessagesPage() {
       <div
         className={`flex-1 min-w-0 ${
           !selectedConv ? "hidden md:flex" : "flex"
-        } flex-col`}
+        } flex-col bg-[var(--bg-primary)]`}
       >
         {selectedConv ? (
           <ChatTimeline
@@ -270,14 +271,14 @@ export default function MessagesPage() {
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/10 to-emerald-500/10 flex items-center justify-center mb-4 border border-[var(--border-subtle)]">
-              <MessageCircle className="w-8 h-8 text-[var(--text-muted)]" />
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-500/10 to-cyan-500/10 flex items-center justify-center mb-6 border border-[var(--border-subtle)] shadow-xl shadow-violet-500/5">
+              <MessageCircle className="w-10 h-10 text-[var(--text-muted)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2 tracking-tight">
               Your Messages
             </h3>
-            <p className="text-sm text-[var(--text-secondary)] max-w-xs text-center">
-              Select a conversation or start a new DM to chat with founders and share ideas.
+            <p className="text-base text-[var(--text-secondary)] max-w-sm text-center leading-relaxed">
+              Select a conversation from the sidebar or start a new DM to chat with founders and share ideas.
             </p>
           </div>
         )}

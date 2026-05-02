@@ -49,8 +49,8 @@ export default function ArenaLayout({
   return (
     <div className="h-screen flex flex-col bg-[var(--bg-primary)]">
       {/* ─── Top Bar ─── */}
-      <header className="shrink-0 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl z-50">
-        <div className="flex items-center justify-between px-4 h-14">
+      <header className="shrink-0 header-accent bg-[var(--bg-primary)]/85 backdrop-blur-2xl z-50">
+        <div className="flex items-center justify-between px-5 h-14">
           <div className="flex items-center gap-3">
             <Link
               href="/nexus"
@@ -60,7 +60,7 @@ export default function ArenaLayout({
               <span className="hidden sm:inline">Nexus</span>
             </Link>
             <div className="w-px h-5 bg-[var(--border-subtle)]" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
                 <Zap className="w-4 h-4 text-white" />
               </div>
@@ -73,9 +73,9 @@ export default function ArenaLayout({
 
           {/* Right side: karma + profile */}
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)]">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)] backdrop-blur-md">
               <Star className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs font-bold text-amber-400">{karma}</span>
+              <span className="text-xs font-bold text-amber-400 tabular-nums">{karma}</span>
               <span className="text-[10px] text-[var(--text-muted)]">karma</span>
             </div>
             {badges.length > 0 && (
@@ -94,7 +94,7 @@ export default function ArenaLayout({
       {/* ─── 3-Column Layout ─── */}
       <div className="flex-1 flex min-h-0">
         {/* ── Left Column: Navigation ── */}
-        <aside className="hidden md:flex w-[240px] shrink-0 glass-nav flex-col justify-between py-4">
+        <aside className="hidden md:flex w-[248px] shrink-0 glass-nav flex-col justify-between py-5">
           <nav className="px-3 space-y-1">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
@@ -134,25 +134,26 @@ export default function ArenaLayout({
             </Link>
 
             {/* User Card */}
-            <div className="glass-card p-3">
-              <div className="flex items-center gap-2.5 mb-2">
+            <div className="glass-card p-3.5">
+              <div className="flex items-center gap-2.5 mb-2.5">
                 <div className="avatar avatar-sm">
                   {userId ? userId.charAt(0).toUpperCase() : "?"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium truncate text-[var(--text-primary)]">Founder</p>
+                  <p className="text-xs font-semibold truncate text-[var(--text-primary)]">Founder</p>
                   <p className="text-[10px] text-[var(--text-muted)] truncate">{userId?.slice(0, 8)}...</p>
                 </div>
               </div>
+              <div className="section-divider mb-2" />
               <div className="flex items-center justify-between text-[10px]">
                 <div className="flex items-center gap-1 text-amber-400">
                   <TrendingUp className="w-3 h-3" />
-                  <span className="font-bold">{karma}</span>
+                  <span className="font-bold tabular-nums">{karma}</span>
                   <span className="text-[var(--text-muted)]">karma</span>
                 </div>
                 <button
                   onClick={logout}
-                  className="text-[var(--text-muted)] hover:text-[var(--accent-rose)] transition-colors"
+                  className="text-[var(--text-muted)] hover:text-[var(--accent-rose)] transition-colors p-1 rounded-md hover:bg-rose-500/10"
                   title="Log out"
                 >
                   <LogOut className="w-3 h-3" />
@@ -163,8 +164,8 @@ export default function ArenaLayout({
         </aside>
 
         {/* ── Mobile Bottom Nav ── */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border-subtle)] bg-[var(--bg-primary)]/90 backdrop-blur-xl">
-          <div className="flex items-center justify-around py-2">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 mobile-nav-enhanced">
+          <div className="flex items-center justify-around py-2.5 px-2">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
@@ -172,9 +173,9 @@ export default function ArenaLayout({
                 <Link
                   key={item.id}
                   href={item.href}
-                  className={`flex flex-col items-center gap-0.5 py-1 px-3 transition-colors ${
+                  className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all duration-200 ${
                     isActive
-                      ? "text-[var(--accent-violet)]"
+                      ? "text-[var(--accent-violet)] bg-violet-500/10"
                       : "text-[var(--text-muted)]"
                   }`}
                 >
@@ -203,7 +204,7 @@ export default function ArenaLayout({
         </main>
 
         {/* ── Right Column: Contextual Intelligence ── */}
-        <aside className="hidden lg:block w-[300px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)]/30 overflow-y-auto">
+        <aside className="hidden lg:block w-[300px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)]/20 overflow-y-auto">
           <RightSidebarContent activeNav={activeNav} />
         </aside>
       </div>
@@ -214,7 +215,7 @@ export default function ArenaLayout({
 /* ─── Right Sidebar Content ─── */
 function RightSidebarContent({ activeNav }: { activeNav: string }) {
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-5 space-y-6">
       {activeNav === "feed" && <FeedSidebar />}
       {activeNav === "explore" && <ExploreSidebar />}
       {activeNav === "messages" && <MessagesSidebar />}
@@ -275,7 +276,9 @@ function TrendingSection() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <TrendingUp className="w-4 h-4 text-[var(--accent-cyan)]" />
+        <div className="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+          <TrendingUp className="w-3.5 h-3.5 text-[var(--accent-cyan)]" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Trending Ideas</h3>
       </div>
       <div className="space-y-2">
@@ -334,10 +337,12 @@ function SuggestedFoundersSection() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Users2 className="w-4 h-4 text-[var(--accent-violet)]" />
+        <div className="w-6 h-6 rounded-lg bg-violet-500/10 flex items-center justify-center">
+          <Users2 className="w-3.5 h-3.5 text-[var(--accent-violet)]" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Suggested Founders</h3>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {!loaded ? (
           [1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-2.5 p-2 rounded-lg">
@@ -352,7 +357,7 @@ function SuggestedFoundersSection() {
           <p className="text-xs text-[var(--text-muted)]">No founders to suggest yet.</p>
         ) : (
           founders.map((f) => (
-            <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/[0.02] transition-colors cursor-pointer">
+            <div key={f.id} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-white/[0.03] transition-all cursor-pointer">
               <div className="avatar avatar-sm">{f.username.charAt(0).toUpperCase()}</div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-[var(--text-primary)] truncate">{f.display_name || f.username}</p>
@@ -373,7 +378,9 @@ function ExploreSidebar() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Search className="w-4 h-4 text-[var(--accent-cyan)]" />
+        <div className="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+          <Search className="w-3.5 h-3.5 text-[var(--accent-cyan)]" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Search Tips</h3>
       </div>
       <div className="glass-card p-4 space-y-3">
@@ -398,11 +405,13 @@ function MessagesSidebar() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <MessageCircle className="w-4 h-4 text-[var(--accent-emerald)]" />
+        <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+          <MessageCircle className="w-3.5 h-3.5 text-[var(--accent-emerald)]" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Quick Actions</h3>
       </div>
       <div className="glass-card p-4 space-y-2">
-        <p className="text-xs text-[var(--text-secondary)]">
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
           Share ideas in DMs to get instant AI validation. Click the <strong>+</strong> button in any chat to run an AI analysis.
         </p>
       </div>
@@ -414,10 +423,12 @@ function GroupsSidebar() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Users2 className="w-4 h-4 text-[var(--accent-violet)]" />
+        <div className="w-6 h-6 rounded-lg bg-violet-500/10 flex items-center justify-center">
+          <Users2 className="w-3.5 h-3.5 text-[var(--accent-violet)]" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Your Groups</h3>
       </div>
-      <p className="text-xs text-[var(--text-muted)]">
+      <p className="text-xs text-[var(--text-muted)] leading-relaxed">
         Join a group to see members and the leaderboard here.
       </p>
     </div>
@@ -428,11 +439,13 @@ function ProfileSidebar() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Star className="w-4 h-4 text-amber-400" />
+        <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
+          <Star className="w-3.5 h-3.5 text-amber-400" />
+        </div>
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">Achievements</h3>
       </div>
       <div className="glass-card p-4">
-        <p className="text-xs text-[var(--text-secondary)]">
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
           Earn badges by publishing ideas, receiving upvotes, and engaging with the community.
         </p>
       </div>
@@ -460,14 +473,14 @@ function PlatformStatsSection() {
   return (
     <div className="glass-card p-4">
       <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">Platform</h3>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <p className="text-lg font-bold gradient-text">{stats.ideas}</p>
-          <p className="text-[10px] text-[var(--text-muted)]">Ideas Validated</p>
+          <p className="text-xl font-bold gradient-text tabular-nums">{stats.ideas}</p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Ideas Validated</p>
         </div>
         <div>
-          <p className="text-lg font-bold text-[var(--accent-emerald)]">{stats.founders}</p>
-          <p className="text-[10px] text-[var(--text-muted)]">Founders Active</p>
+          <p className="text-xl font-bold text-[var(--accent-emerald)] tabular-nums">{stats.founders}</p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Founders Active</p>
         </div>
       </div>
     </div>
