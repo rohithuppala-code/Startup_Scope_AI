@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserStore } from "@/stores/user-store";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Home,
   Search,
@@ -73,6 +74,7 @@ export default function ArenaLayout({
 
           {/* Right side: karma + profile */}
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)] backdrop-blur-md">
               <Star className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-xs font-bold text-amber-400 tabular-nums">{karma}</span>
