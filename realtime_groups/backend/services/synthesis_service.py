@@ -38,18 +38,19 @@ def synthesize_thread(post_id: str) -> dict[str, Any]:
     """
     sb = get_supabase()
 
-    # 1. Fetch post metadata
+    # BUG FIX: .single() raises APIError on missing rows, bypassing the ValueError
+    # the router expects for its 404 mapping. Use .limit(1) instead.
     post_resp = (
         sb.table("posts")
         .select("id, title, report_json")
         .eq("id", post_id)
-        .single()
+        .limit(1)
         .execute()
     )
     if not post_resp.data:
         raise ValueError(f"Post {post_id} not found.")
 
-    post = post_resp.data
+    post = post_resp.data[0]
 
     # 2. Fetch all visible comments
     comments_resp = (
@@ -77,9 +78,10 @@ def synthesize_thread(post_id: str) -> dict[str, Any]:
         "Generate the strategic synthesis JSON now."
     )
 
-    # 4. Gemini 2.0 Flash API call via new google-genai SDK
+    # 4. Gemini 2.0 Flash API call via load-balanced connection pool
     try:
-        client = genai.Client(api_key=social_settings.GEMINI_API_KEY)
+        from app.services.ai_pipeline import _get_gemini
+        client = _get_gemini(task="consensus")
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=user_prompt,

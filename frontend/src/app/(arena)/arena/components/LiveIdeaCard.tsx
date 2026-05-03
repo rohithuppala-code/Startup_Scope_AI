@@ -89,7 +89,7 @@ export default function LiveIdeaCard({
   const [commentText, setCommentText] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
   const [localCommentCount, setLocalCommentCount] = useState(commentCount);
-  const { sections, status: wsStatus, connect } = useWebSocket();
+  const { sections, rawReport, status: wsStatus, connect } = useWebSocket();
 
   // Mutable local title/content that can be populated from the AI report
   const [liveTitle, setLiveTitle] = useState(title || (ideaDescription ? ideaDescription.slice(0, 60) + (ideaDescription.length > 60 ? "..." : "") : ""));
@@ -101,15 +101,18 @@ export default function LiveIdeaCard({
       if (wsStatus === "completed") {
         setPhase("completed");
         onPhaseChange?.("completed");
-        // Extract report from WS sections
-        const reportSection = sections.find((s) => s.section === "report" || s.section === "consensus");
-        if (reportSection) {
-          setReport(reportSection.data);
-          // Populate title from report if not already set
-          const r = reportSection.data;
-          if (!title && r) {
-            const reportTitle = (r as Record<string,unknown>).idea_title || (r as Record<string,unknown>).title;
-            if (typeof reportTitle === "string") setLiveTitle(reportTitle);
+        // BUG FIX: rawReport is the full report_json object.
+        // The old code looked for a phantom "report" section that never existed
+        // because the WS hook flattens report_json into named sections.
+        // We now use rawReport directly for feasibility score and tab data.
+        if (rawReport) {
+          setReport(rawReport);
+          // Populate title from report fields if not explicitly set
+          if (!title) {
+            const reportTitle = rawReport.idea_title ?? rawReport.title;
+            if (typeof reportTitle === "string" && reportTitle) {
+              setLiveTitle(reportTitle);
+            }
           }
         }
       } else if (wsStatus === "failed") {
@@ -117,7 +120,7 @@ export default function LiveIdeaCard({
         onPhaseChange?.("completed");
       }
     }
-  }, [wsStatus, phase, sections, onPhaseChange, title]);
+  }, [wsStatus, rawReport, phase, onPhaseChange, title]);
 
   // Connect WS when streaming starts
   useEffect(() => {
@@ -127,14 +130,26 @@ export default function LiveIdeaCard({
   }, [phase, validationId, connect]);
 
   const feasibilityScore = useMemo(() => {
-    if (!report) return null;
-    const r = report as Record<string, unknown>;
-    const consensus = r.consensus_confidence ?? r.feasibility_score ?? r.score;
-    if (typeof consensus === "number") {
-      return consensus <= 1.0 ? Math.round(consensus * 100) : Math.round(consensus);
+    // Use rawReport (from props or WS) for score extraction.
+    // Check multiple possible locations the backend stores the score:
+    //   report_json.consensus.consensus_confidence  (nested)
+    //   report_json.consensus_confidence            (top-level)
+    //   report_json.feasibility_score               (legacy)
+    //   report_json.score                           (fallback)
+    const source = report ?? rawReport ?? (reportJson as Record<string, unknown> | null);
+    if (!source) return null;
+    const r = source as Record<string, unknown>;
+    const consensus = r.consensus as Record<string, unknown> | undefined;
+    const raw =
+      consensus?.consensus_confidence ??
+      r.consensus_confidence ??
+      r.feasibility_score ??
+      r.score;
+    if (typeof raw === "number") {
+      return raw <= 1.0 ? Math.round(raw * 100) : Math.round(raw);
     }
     return null;
-  }, [report]);
+  }, [report, rawReport, reportJson]);
 
   const scoreClass = useMemo(() => {
     if (feasibilityScore === null) return "";
@@ -146,18 +161,38 @@ export default function LiveIdeaCard({
   const handleVote = useCallback(
     async (direction: 1 | -1) => {
       if (!userId || !postId) return;
+      // Optimistic UI: update score immediately
+      const delta = direction;
+      setScore((prev) => prev + delta);
+      setVotes((prev) => ({
+        up: direction === 1 ? prev.up + 1 : prev.up,
+        down: direction === -1 ? prev.down + 1 : prev.down,
+      }));
       try {
         const res = await api<{ new_score: number }>(
           `/api/v1/arena/posts/${postId}/vote`,
           { method: "POST", userId, body: { direction } }
         );
+        // Reconcile with server score
         setScore(res.new_score);
-        setVotes((prev) => ({
-          up: direction === 1 ? prev.up + 1 : prev.up,
-          down: direction === -1 ? prev.down + 1 : prev.down,
-        }));
-      } catch (err) {
-        console.error("[LiveIdeaCard] Vote error:", err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("409")) {
+          // Already voted in this direction — revert optimistic update silently
+          setScore((prev) => prev - delta);
+          setVotes((prev) => ({
+            up: direction === 1 ? Math.max(0, prev.up - 1) : prev.up,
+            down: direction === -1 ? Math.max(0, prev.down - 1) : prev.down,
+          }));
+        } else {
+          // Real error — revert and log
+          setScore((prev) => prev - delta);
+          setVotes((prev) => ({
+            up: direction === 1 ? Math.max(0, prev.up - 1) : prev.up,
+            down: direction === -1 ? Math.max(0, prev.down - 1) : prev.down,
+          }));
+          console.error("[LiveIdeaCard] Vote error:", err);
+        }
       }
     },
     [userId, postId]
@@ -340,16 +375,22 @@ export default function LiveIdeaCard({
           {report && (
             <div className="mt-4 space-y-2">
               <div className="tab-bar p-1 bg-black/20">
-                {["competitors", "pricing", "market"].map((tab) => (
+                {(
+                [
+                  // BUG FIX: tab keys must match backend report_json keys exactly.
+                  // Old keys "competitors" / "market" never existed in the backend payload.
+                  { key: "competitor_analysis", label: "Competitors", Icon: Users2 },
+                  { key: "pricing",             label: "Pricing",     Icon: DollarSign },
+                  { key: "market_analysis",     label: "Market",      Icon: BarChart3 },
+                ] as const
+              ).map(({ key, label, Icon }) => (
                   <button
-                    key={tab}
-                    onClick={() => setExpandedTab(expandedTab === tab ? null : tab)}
-                    className={`tab-item py-1.5 px-4 ${expandedTab === tab ? "tab-item-active" : ""}`}
+                    key={key}
+                    onClick={() => setExpandedTab(expandedTab === key ? null : key)}
+                    className={`tab-item py-1.5 px-4 ${expandedTab === key ? "tab-item-active" : ""}`}
                   >
-                    {tab === "competitors" && <Users2 className="w-3.5 h-3.5 inline mr-1.5" />}
-                    {tab === "pricing" && <DollarSign className="w-3.5 h-3.5 inline mr-1.5" />}
-                    {tab === "market" && <BarChart3 className="w-3.5 h-3.5 inline mr-1.5" />}
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    <Icon className="w-3.5 h-3.5 inline mr-1.5" />
+                    {label}
                   </button>
                 ))}
               </div>
@@ -366,11 +407,16 @@ export default function LiveIdeaCard({
                   >
                     <div className="glass-card p-4 text-sm text-[var(--text-secondary)] whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed border-t-0 rounded-t-none bg-black/10">
                       {(() => {
-                        const r = report as Record<string, unknown>;
-                        const data = r[expandedTab] ?? r[`${expandedTab}_data`] ?? r[`${expandedTab}_analysis`];
+                        // BUG FIX: report may be the full report_json (object with
+                        // keys like competitor_analysis, pricing, market_analysis)
+                        // or a single section's data. Check both.
+                        const src = (report ?? rawReport ?? reportJson) as Record<string, unknown> | null;
+                        if (!src || !expandedTab) return "No data available.";
+                        const data = src[expandedTab];
                         if (data && typeof data === "object") {
                           return JSON.stringify(data, null, 2);
                         }
+                        if (typeof data === "string") return data;
                         return `No ${expandedTab} data available in this report.`;
                       })()}
                     </div>
@@ -418,7 +464,7 @@ export default function LiveIdeaCard({
                     // Fallback for arena posts
                     const res = await api<{ synthesis?: string; summary?: string }>(`/api/v1/arena/posts/${postId}/synthesize`, {
                       method: "POST",
-                      userId: userId || "",
+                      userId: userId || undefined,
                     });
                     setSynthesis(res.synthesis || res.summary || "Summary unavailable.");
                   } else {

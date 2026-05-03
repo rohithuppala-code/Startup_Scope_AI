@@ -51,20 +51,22 @@ def add_karma(user_id: str, delta: int, reason: str) -> dict:
     """
     sb = get_supabase()
 
-    # Fetch current karma first (Supabase JS SDK has rpc(), Python SDK uses .rpc())
-    # We use a stored procedure pattern via plain select + update to stay portable.
+    # BUG FIX: .single() raises APIError when the profile row doesn't exist,
+    # crashing the entire karma reward/penalty pipeline (arena voting, comments,
+    # moderation all call this). Use .limit(1) for safe zero-row handling.
     fetch_resp = (
         sb.table("profiles")
         .select("id, karma_score, badges, username")
         .eq("id", user_id)
-        .single()
+        .limit(1)
         .execute()
     )
     if not fetch_resp.data:
-        raise ValueError(f"[ReputationEngine] Profile not found for user_id={user_id}")
+        logger.warning("[ReputationEngine] Profile not found for user_id=%s — skipping karma mutation.", user_id)
+        return {"karma_score": 0, "badges": [], "id": user_id}
 
-    profile = fetch_resp.data
-    current_karma: int = profile.get("karma_score", 0)
+    profile = fetch_resp.data[0]
+    current_karma: int = profile.get("karma_score", 0) or 0
     new_karma = max(0, current_karma + delta)  # Floor at 0; no negative karma
 
     update_resp = (

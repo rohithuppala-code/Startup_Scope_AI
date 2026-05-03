@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/stores/user-store";
-import { useArenaFeed } from "@/hooks/use-arena-feed";
+import { useArenaFeed, type Post } from "@/hooks/use-arena-feed";
 import LiveIdeaCard from "./components/LiveIdeaCard";
 
 export default function ArenaFeedPage() {
@@ -84,6 +84,7 @@ export default function ArenaFeedPage() {
         content: composerText.trim(),
         author_id: userId,
         author_username: "You",
+        author_avatar: null,           // BUG FIX: field was missing; caused TS error
         karma_score: 0,
         upvote_count: 0,
         downvote_count: 0,
@@ -92,7 +93,7 @@ export default function ArenaFeedPage() {
         created_at: new Date().toISOString(),
         validation_id: valRes.validation_id,
         report_json: null,
-      });
+      } satisfies Post);
 
       // Reset composer
       setComposerText("");
@@ -253,16 +254,33 @@ export default function ArenaFeedPage() {
                   initialPhase={isStreaming ? "streaming" : "interactive"}
                   ideaDescription={post.content}
                   onPhaseChange={(phase) => {
-                    if (phase === "completed" && isStreaming && userId) {
-                      api("/api/v1/arena/publish", {
-                        method: "POST",
-                        userId,
-                        body: {
-                          validation_id: post.validation_id,
-                          title: post.title || "Startup Idea",
-                          tags: post.tags,
-                        },
-                      }).catch(console.error);
+                    if (phase === "completed" && isStreaming && userId && post.validation_id) {
+                      // BUG FIX: auto-publish races with the Celery worker updating
+                      // the DB status to "completed". The publish endpoint rejects
+                      // with 422 if status !== "completed". Retry with backoff.
+                      const publish = async (attempt = 1) => {
+                        try {
+                          await api("/api/v1/arena/publish", {
+                            method: "POST",
+                            userId,
+                            body: {
+                              validation_id: post.validation_id,
+                              title: post.title || "Startup Idea",
+                              tags: post.tags,
+                            },
+                          });
+                        } catch (err: unknown) {
+                          const msg = err instanceof Error ? err.message : String(err);
+                          if (msg.includes("409")) return; // Already published — ok
+                          if (msg.includes("422") && attempt < 5) {
+                            // Worker hasn't committed completed status yet — retry
+                            setTimeout(() => publish(attempt + 1), attempt * 3000);
+                          } else {
+                            console.warn("[ArenaFeed] Auto-publish failed:", msg);
+                          }
+                        }
+                      };
+                      publish();
                     }
                   }}
                 />

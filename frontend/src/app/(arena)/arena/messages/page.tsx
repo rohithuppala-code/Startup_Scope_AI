@@ -9,6 +9,7 @@ import {
   UserPlus,
   Users2,
   X,
+  ChevronRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useUserStore } from "@/stores/user-store";
@@ -41,6 +42,7 @@ export default function MessagesPage() {
   const [newDMUsername, setNewDMUsername] = useState("");
   const [searchResults, setSearchResults] = useState<SearchProfile[]>([]);
   const [searching, setSearching] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Debounced search for founders
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function MessagesPage() {
       setShowNewDM(false);
       setNewDMUsername("");
       setSearchResults([]);
+      setIsSidebarOpen(false);
     } catch (err) {
       console.error("[Messages] Init DM error:", err);
     }
@@ -115,7 +118,7 @@ export default function MessagesPage() {
       {/* ─── Conversations List ─── */}
       <div
         className={`w-full md:w-[360px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col bg-black/10 backdrop-blur-sm z-10 ${
-          selectedConv ? "hidden md:flex" : "flex"
+          !isSidebarOpen ? "hidden" : "flex"
         }`}
       >
         {/* Header */}
@@ -143,7 +146,7 @@ export default function MessagesPage() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden mb-4"
+                className="mb-4 overflow-visible"
               >
                 <div className="relative">
                   <div className="flex items-center gap-2">
@@ -186,18 +189,6 @@ export default function MessagesPage() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Search */}
-          <div className="relative group">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--text-primary)]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search conversations..."
-              className="input-dark text-sm py-2.5 pl-10 shadow-inner w-full"
-            />
-          </div>
         </div>
 
         {/* Conversation List */}
@@ -222,7 +213,10 @@ export default function MessagesPage() {
                   <motion.button
                     key={conv.channel_id}
                     whileHover={{ x: 2 }}
-                    onClick={() => setSelectedConv(conv)}
+                    onClick={() => {
+                      setSelectedConv(conv);
+                      setIsSidebarOpen(false);
+                    }}
                     className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left transition-all ${
                       isActive
                         ? "bg-[var(--accent-violet)]/10 shadow-[inset_2px_0_0_0_rgba(139,92,246,1)]"
@@ -259,10 +253,18 @@ export default function MessagesPage() {
 
       {/* ─── Chat View ─── */}
       <div
-        className={`flex-1 min-w-0 ${
-          !selectedConv ? "hidden md:flex" : "flex"
+        className={`relative flex-1 min-w-0 ${
+          isSidebarOpen ? "hidden md:flex" : "flex"
         } flex-col bg-[var(--bg-primary)]`}
       >
+        {!isSidebarOpen && (
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-50 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] border-l-0 p-2 rounded-r-xl shadow-lg hover:bg-white/5 transition-colors group"
+          >
+            <ChevronRight className="w-5 h-5 text-[var(--text-primary)] group-hover:scale-110 transition-transform" />
+          </button>
+        )}
         {selectedConv ? (
           <ChatTimeline
             channelId={selectedConv.channel_id}

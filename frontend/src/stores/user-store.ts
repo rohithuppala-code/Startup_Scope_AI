@@ -10,12 +10,17 @@ interface UserState {
   karma: number;
   badges: string[];
   isAuthenticated: boolean;
+  
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
 
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username?: string, fullName?: string) => Promise<void>;
   logout: () => void;
   setKarma: (karma: number) => void;
   setBadges: (badges: string[]) => void;
+  setProfileInfo: (displayName: string | null, username: string | null, avatarUrl: string | null) => void;
 }
 
 export const useUserStore = create<UserState>()(
@@ -28,6 +33,9 @@ export const useUserStore = create<UserState>()(
       karma: 0,
       badges: [],
       isAuthenticated: false,
+      displayName: null,
+      username: null,
+      avatarUrl: null,
 
       login: async (email: string, password: string) => {
         const data = await api<{
@@ -76,10 +84,14 @@ export const useUserStore = create<UserState>()(
           karma: 0,
           badges: [],
           isAuthenticated: false,
+          displayName: null,
+          username: null,
+          avatarUrl: null,
         }),
 
       setKarma: (karma) => set({ karma }),
       setBadges: (badges) => set({ badges }),
+      setProfileInfo: (displayName, username, avatarUrl) => set({ displayName, username, avatarUrl }),
     }),
     { name: "startupscope-user" }
   )

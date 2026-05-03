@@ -77,18 +77,18 @@ async def list_conversations(
         else:
             continue
 
-        # Fetch the other participant's profile
+        # Fetch the other participant's profile — .limit(1) safe when profile missing
         profile_resp = await loop.run_in_executor(
             None,
             lambda oid=other_id: (
                 sb.table("profiles")
                 .select("id, username, avatar_url")
                 .eq("id", oid)
-                .single()
+                .limit(1)
                 .execute()
             ),
         )
-        profile = profile_resp.data or {}
+        profile = profile_resp.data[0] if profile_resp.data else {}
 
         # Fetch the last message in this channel
         last_msg_resp = await loop.run_in_executor(
@@ -200,7 +200,7 @@ async def send_message(
     sb = get_supabase()
     loop = asyncio.get_running_loop()
 
-    # Verify the channel exists
+    # Verify the channel exists — .limit(1) avoids .single() crash on bad channel_id
     try:
         ch_resp = await loop.run_in_executor(
             None,
@@ -208,7 +208,7 @@ async def send_message(
                 sb.table("channels")
                 .select("id, kind, name")
                 .eq("id", channel_id)
-                .single()
+                .limit(1)
                 .execute()
             ),
         )
@@ -219,7 +219,7 @@ async def send_message(
         raise HTTPException(status_code=404, detail="Channel not found.")
 
     # For DM channels, verify user is a participant
-    ch_data = ch_resp.data
+    ch_data = ch_resp.data[0]
     if ch_data.get("kind") == "dm":
         if current_user_id not in (ch_data.get("name") or ""):
             raise HTTPException(status_code=403, detail="You are not a participant in this DM.")

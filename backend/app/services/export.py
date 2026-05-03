@@ -432,7 +432,7 @@ def upload_and_sign(
             file=pdf_bytes,
             file_options={
                 "content-type": "application/pdf",
-                "upsert": "true",  # Overwrite if re-exported
+                "upsert": True,  # BUG FIX: Must be boolean, not string "true"
             },
         )
         print(f"[Export] Uploaded to exports/{file_path}.", flush=True)
@@ -480,18 +480,22 @@ def export_validation_pdf(validation_id: str) -> str:
     """
     supabase = _get_supabase()
 
-    # Step 1: Fetch
-    result = (
-        supabase.table("validations")
-        .select(
-            "report_json, markdown_report, tokens_used, estimated_cost, "
-            "model_version, consensus_confidence, pricing_data, funding_data, "
-            "patent_data, traffic_data, status"
+    # BUG FIX: .single() raises Supabase APIError if 0 or multiple rows are found.
+    # Wrap in try/except and convert to ValueError so the caller returns a 404.
+    try:
+        result = (
+            supabase.table("validations")
+            .select(
+                "report_json, markdown_report, tokens_used, estimated_cost, "
+                "model_version, consensus_confidence, pricing_data, funding_data, "
+                "patent_data, traffic_data, status"
+            )
+            .eq("id", validation_id)
+            .single()
+            .execute()
         )
-        .eq("id", validation_id)
-        .single()
-        .execute()
-    )
+    except Exception:
+        raise ValueError(f"Validation {validation_id} not found or inaccessible.")
 
     if not result.data:
         raise ValueError(f"Validation {validation_id} not found.")

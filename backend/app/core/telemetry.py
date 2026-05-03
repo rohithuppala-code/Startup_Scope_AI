@@ -90,9 +90,12 @@ def init_telemetry() -> None:
             )
             provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
     else:
-        # Console exporter for development
-        provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
-        print("[Telemetry] Console exporter configured (no OTLP endpoint).", flush=True)
+        # Console exporter for development (opt-in to avoid log spam)
+        if getattr(settings, "OTEL_CONSOLE_EXPORT", "false").lower() == "true":
+            provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+            print("[Telemetry] Console exporter configured (no OTLP endpoint).", flush=True)
+        else:
+            print("[Telemetry] Tracking enabled without console output. Set OTEL_CONSOLE_EXPORT=true to view traces.", flush=True)
 
     trace.set_tracer_provider(provider)
     _INITIALIZED = True

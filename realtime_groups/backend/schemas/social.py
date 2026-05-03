@@ -97,13 +97,18 @@ class ArenaPostSummary(BaseModel):
     """Lightweight post card used in paginated list responses."""
     id: uuid.UUID
     title: str
+    content: str = ""                         # idea description text
+    author_id: Optional[str] = None
     author_username: str
+    author_avatar: Optional[str] = None        # profile avatar_url
     karma_score: int
     upvote_count: int
     downvote_count: int
     comment_count: int
     tags: list[str]
     created_at: Optional[datetime] = None
+    report_json: Optional[Any] = None          # full AI report for tabs + feasibility
+    validation_id: Optional[uuid.UUID] = None  # link back to validation pipeline
 
 
 # ─────────────────────────────────────────────────────────────────────────────

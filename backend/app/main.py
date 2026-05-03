@@ -17,6 +17,7 @@ from app.api.ws_router import router as ws_router
 from app.api.chat_router import router as chat_router
 from app.api.export_router import router as export_router
 from app.api.comparison_router import router as comparison_router
+from app.api.workspace_router import router as workspace_router  # BUG FIX: was never registered
 
 # Discord for Founders — Social Pillar
 from realtime_groups.backend.social_app import include_social_routers
@@ -93,8 +94,8 @@ app.include_router(ws_router)
 app.include_router(auth_router)
 app.include_router(chat_router)          # Feature 12: Conversational RAG
 app.include_router(export_router)        # Feature 13: PDF Export
-
 app.include_router(comparison_router)    # Feature 15: Idea Comparison Engine
+app.include_router(workspace_router)     # BUG FIX: Team collaboration endpoints now reachable
 
 # Phase 1-3: Discord for Founders — Identity Graph, Arena, Community, AI Moderation
 include_social_routers(app)
@@ -105,6 +106,26 @@ supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVIC
 # Synchronous Redis client for cache-aside reads in the FastAPI process.
 # DB 0 matches the worker's cache layer. DB 1 is reserved for Celery results.
 _redis = sync_redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+
+# ---------------------------------------------------------------------------
+# GET /health  — Liveness probe (used by startup.sh, tests, load balancers)
+# ---------------------------------------------------------------------------
+@app.get("/health", tags=["health"])
+@app.get("/api/v1/health", tags=["health"])
+async def health_check():
+    """Returns service health including Redis connectivity."""
+    redis_ok = False
+    try:
+        redis_ok = _redis.ping()
+    except Exception:
+        pass
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "redis": "connected" if redis_ok else "unreachable",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +321,9 @@ async def get_validation(
         # Redis is down or cache is corrupt — fall through to DB.
         print(f"[API] Redis cache read failed for {validation_id}: {cache_err}")
 
-    # ---- Step 2: Supabase fetch (cache miss) ----
+    # BUG FIX: .single() with .eq("user_id") raises APIError(500) when the row
+    # exists but belongs to a different user (0 rows returned) — the client gets
+    # a 500 instead of a clean 404. Use .limit(1) + explicit ownership check.
     try:
         db_response = await loop.run_in_executor(
             None,
@@ -313,7 +336,7 @@ async def get_validation(
                 )
                 .eq("id", validation_id)
                 .eq("user_id", x_user_id)   # Enforce ownership — users can only read their own.
-                .single()
+                .limit(1)
                 .execute()
             ),
         )
@@ -329,7 +352,7 @@ async def get_validation(
             detail="Validation not found or you do not have access to it.",
         )
 
-    record = db_response.data
+    record = db_response.data[0]  # BUG FIX: was db_response.data (the full list)
 
     # ---- Step 3: Back-fill Redis cache (only for terminal states) ----
     # Only cache completed/failed rows — 'pending' and 'processing' rows
@@ -389,7 +412,7 @@ async def get_validation_status(validation_id: str) -> Dict[str, Any]:
             lambda: supabase.table("validations")
                 .select("id, status, report_json")
                 .eq("id", validation_id)
-                .single()
+                .limit(1)  # BUG FIX: .single() raised APIError on missing row → 500
                 .execute()
         )
     except Exception as e:
@@ -398,7 +421,7 @@ async def get_validation_status(validation_id: str) -> Dict[str, Any]:
     if not db_resp.data:
         raise HTTPException(status_code=404, detail="Validation not found.")
 
-    rec = db_resp.data
+    rec = db_resp.data[0]  # BUG FIX: was db_resp.data (the full list)
     return {"validation_id": validation_id, "status": rec["status"], "report_json": rec.get("report_json")}
 
 
@@ -417,13 +440,15 @@ async def summarize_validation(validation_id: str) -> Dict[str, Any]:
     loop = asyncio.get_running_loop()
 
     # Fetch report_json + markdown_report
+    # BUG FIX: .single() returns APIError(500) when validation doesn't exist;
+    # the try/except catches it but raises 500 instead of 404. Use .limit(1).
     try:
         db_resp = await loop.run_in_executor(
             None,
             lambda: supabase.table("validations")
                 .select("id, status, report_json, markdown_report, idea_description")
                 .eq("id", validation_id)
-                .single()
+                .limit(1)
                 .execute()
         )
     except Exception as e:
@@ -432,7 +457,7 @@ async def summarize_validation(validation_id: str) -> Dict[str, Any]:
     if not db_resp.data:
         raise HTTPException(status_code=404, detail="Validation not found.")
 
-    rec = db_resp.data
+    rec = db_resp.data[0]
     if rec["status"] != "completed":
         raise HTTPException(status_code=400, detail=f"Validation not completed yet (status: {rec['status']})")
 

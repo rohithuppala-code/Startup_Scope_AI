@@ -7,11 +7,15 @@
 #   → Uploads to Supabase Storage
 #   → Returns a signed download URL
 #
-# This is a synchronous endpoint (not async) because WeasyPrint is CPU-bound.
-# For high-traffic deployments, this should be offloaded to a Celery task.
+# BUG FIX: The original endpoint called export_validation_pdf() directly
+# in the async handler. WeasyPrint is CPU-bound and the Supabase fetch
+# inside is synchronous — both block the async event loop. Fixed by
+# wrapping in run_in_executor, consistent with all other endpoints.
 # ---------------------------------------------------------------------------
 
 from __future__ import annotations
+
+import asyncio
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -44,8 +48,12 @@ async def export_pdf(validation_id: str) -> ExportResponse:
 
     Generates and returns a signed download URL for the report PDF.
     """
+    loop = asyncio.get_running_loop()
     try:
-        url = export_validation_pdf(validation_id)
+        url = await loop.run_in_executor(
+            None,
+            lambda: export_validation_pdf(validation_id),
+        )
         return ExportResponse(
             download_url=url,
             validation_id=validation_id,

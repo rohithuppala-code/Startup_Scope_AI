@@ -2,12 +2,14 @@
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 
-interface Post {
+// Must match ArenaPostSummary schema exactly (including newly added fields)
+export interface Post {
   id: string;
   title: string;
   content: string;
   author_id: string;
   author_username: string;
+  author_avatar?: string | null;
   karma_score: number;
   upvote_count: number;
   downvote_count: number;
@@ -47,7 +49,11 @@ export function useArenaFeed(pageSize = 20): UseArenaFeedReturn {
         if (replace) {
           setPosts(data);
         } else {
-          setPosts((prev) => [...prev, ...data]);
+          setPosts((prev) => {
+            // Deduplicate: never add posts whose id already exists
+            const existing = new Set(prev.map((p) => p.id));
+            return [...prev, ...data.filter((p) => !existing.has(p.id))];
+          });
         }
         setHasMore(data.length === pageSize);
       } catch (err) {
@@ -86,7 +92,11 @@ export function useArenaFeed(pageSize = 20): UseArenaFeedReturn {
   }, []);
 
   const prependPost = useCallback((post: Post) => {
-    setPosts((prev) => [post, ...prev]);
+    setPosts((prev) => {
+      // Avoid duplicates if the same temp post is prepended twice
+      if (prev.some((p) => p.id === post.id)) return prev;
+      return [post, ...prev];
+    });
   }, []);
 
   return { posts, loading, hasMore, loadMore, refreshFeed, updatePost, prependPost };

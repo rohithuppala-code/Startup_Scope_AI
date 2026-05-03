@@ -283,19 +283,21 @@ async def invite_member(
     supabase = _get_supabase()
 
     # Verify the inviter is an owner/editor of this workspace
+    # BUG FIX: .single() raises an APIError when zero rows are found (not 'no auth'),
+    # causing a 500 instead of the intended 403. Use .limit(1) + data check instead.
     membership = (
         supabase.table("workspace_members")
         .select("role")
         .eq("workspace_id", workspace_id)
         .eq("user_id", user_id)
-        .single()
+        .limit(1)
         .execute()
     )
 
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this workspace.")
 
-    inviter_role = membership.data.get("role", "viewer")
+    inviter_role = membership.data[0].get("role", "viewer")
     if inviter_role not in ("owner", "editor"):
         raise HTTPException(
             status_code=403,
@@ -330,25 +332,15 @@ async def invite_member(
         elif isinstance(invite_result, dict):
             invited_user_id = invite_result.get("user", {}).get("id")
 
-        # Add to workspace_members
+        # Add to workspace_members — use upsert for idempotency
+        # (re-inviting an existing member updates their role instead of erroring)
         if invited_user_id:
-            try:
-                supabase.table("workspace_members").insert({
-                    "workspace_id": workspace_id,
-                    "user_id": invited_user_id,
-                    "email": request.email,
-                    "role": request.role,
-                }).execute()
-            except Exception as member_err:
-                # Unique constraint violation = already a member
-                err_str = str(member_err).lower()
-                if "23505" in err_str or "unique" in err_str:
-                    # Update their role instead
-                    supabase.table("workspace_members").update({
-                        "role": request.role,
-                    }).eq("workspace_id", workspace_id).eq("user_id", invited_user_id).execute()
-                else:
-                    raise
+            supabase.table("workspace_members").upsert({
+                "workspace_id": workspace_id,
+                "user_id": invited_user_id,
+                "email": request.email,
+                "role": request.role,
+            }, on_conflict="workspace_id,user_id").execute()
 
         return InviteResponse(
             message=f"Invitation sent to {request.email}.",

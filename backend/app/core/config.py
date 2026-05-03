@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     # ── External AI Providers ─────────────────────────────────────────────
     FIRECRAWL_API_KEY: str
     GEMINI_API_KEY: str
+    GEMINI_EMBEDDING: str = ""
+    WEB_RERANKING: str = ""
+    MAIN_Consensus_PIPELINE: str = ""
+    PATENT: str = ""
+    temporal_memory_comparision: str = ""
     GROQ_API_KEY: str  # Feature 1: Multi-model consensus (Llama 3.1 70B)
 
     # ── Reddit API (Feature 7 — Social Sentiment) ────────────────────────

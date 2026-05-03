@@ -216,7 +216,7 @@ def generate_change_narrative(
     if not changes:
         return "No significant changes detected between report versions."
 
-    client = _get_gemini()
+    client = _get_gemini(task="temporal")
 
     # Build a concise change summary for the prompt
     changes_text = "\n".join(

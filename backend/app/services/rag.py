@@ -23,6 +23,13 @@ from __future__ import annotations
 
 import re
 from typing import List, Tuple
+from dataclasses import dataclass
+
+@dataclass
+class Chunk:
+    text: str
+    score: float
+    source_url: str = ""
 
 from supabase import create_client, Client
 
@@ -303,25 +310,103 @@ def retrieve_context(
     return ""
 
 
+def retrieve_context_structured(
+    query_text: str,
+    validation_id: str,
+    top_k: int = 10,
+) -> List[Chunk]:
+    """
+    Retrieves the top-K most relevant RAG chunks for the given query.
+    Returns a list of Chunk objects instead of a concatenated string.
+    """
+    query_embedding = embed_text(query_text)
+    if not query_embedding:
+        print("[RAG] Query embedding failed — skipping RAG grounding.", flush=True)
+        return []
+
+    supabase = _get_supabase()
+    chunks_result: List[Chunk] = []
+
+    try:
+        # Fallback: brute-force cosine similarity in Python since RPC match_rag_chunks
+        # might not return source_url or we want to guarantee the fields are present.
+        all_chunks = (
+            supabase.table("rag_chunks")
+            .select("chunk_text, embedding, source_url")
+            .eq("validation_id", validation_id)
+            .execute()
+        )
+
+        if not all_chunks.data:
+            print("[RAG] No chunks found for this validation.", flush=True)
+            return []
+
+        scored_chunks: List[Tuple[float, str, str]] = []
+        for row in all_chunks.data:
+            chunk_embedding = row.get("embedding")
+            chunk_text = row.get("chunk_text", "")
+            source_url = row.get("source_url") or ""
+
+            if not chunk_embedding or not chunk_text:
+                continue
+
+            similarity = _cosine_similarity(query_embedding, chunk_embedding)
+            scored_chunks.append((similarity, chunk_text, source_url))
+
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        
+        for sim, text, url in scored_chunks[:top_k]:
+            chunks_result.append(Chunk(text=text, score=sim, source_url=url))
+            
+        print(f"[RAG] Retrieved {len(chunks_result)} structured chunks via fallback.", flush=True)
+    except Exception as fallback_err:
+        print(f"[RAG] Structured search failed: {fallback_err}", flush=True)
+
+    return chunks_result
+
 def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
     """
     Computes cosine similarity between two vectors.
-    Pure Python — no numpy dependency needed for this simple operation.
+
+    PERFORMANCE FIX: The original pure Python implementation used a list
+    comprehension over 768 dimensions — ~50x slower than numpy for the
+    fallback RAG path which must score ALL stored chunks. We now use numpy
+    for the vectorized dot product and norms. Numpy is already transitively
+    available via google-generativeai (it depends on numpy internally).
+
+    Falls back to pure Python if numpy is not available.
     """
-    if len(vec_a) != len(vec_b):
-        # Dimension mismatch — truncate to shorter
-        min_len = min(len(vec_a), len(vec_b))
-        vec_a = vec_a[:min_len]
-        vec_b = vec_b[:min_len]
+    try:
+        import numpy as np
+        a = np.array(vec_a, dtype=np.float32)
+        b = np.array(vec_b, dtype=np.float32)
 
-    dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
-    magnitude_a = sum(a * a for a in vec_a) ** 0.5
-    magnitude_b = sum(b * b for b in vec_b) ** 0.5
+        # Handle dimension mismatch by truncating to the shorter vector
+        if len(a) != len(b):
+            min_len = min(len(a), len(b))
+            a = a[:min_len]
+            b = b[:min_len]
 
-    if magnitude_a == 0 or magnitude_b == 0:
-        return 0.0
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return float(np.dot(a, b) / (norm_a * norm_b))
 
-    return dot_product / (magnitude_a * magnitude_b)
+    except ImportError:
+        # Pure Python fallback (no numpy)
+        if len(vec_a) != len(vec_b):
+            min_len = min(len(vec_a), len(vec_b))
+            vec_a = vec_a[:min_len]
+            vec_b = vec_b[:min_len]
+
+        dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
+        magnitude_a = sum(a * a for a in vec_a) ** 0.5
+        magnitude_b = sum(b * b for b in vec_b) ** 0.5
+
+        if magnitude_a == 0 or magnitude_b == 0:
+            return 0.0
+        return dot_product / (magnitude_a * magnitude_b)
 
 
 # =====================================================================

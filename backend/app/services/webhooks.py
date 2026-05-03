@@ -414,12 +414,23 @@ def dispatch_validation_webhook(
         payload["report_json"] = report_json
 
     # Dispatch asynchronously via Celery
-    from app.worker.celery_tasks import deliver_webhook_task
-    deliver_webhook_task.delay(
-        url=url,
-        secret=secret,
-        payload=payload,
-        event_type=event_type,
-    )
+    # BUG FIX: The inline import was fragile — if register_webhook_task() hasn't
+    # been called yet (e.g. in tests or before worker boots), this raises an
+    # ImportError that crashes the entire post-validation cleanup. Added guard.
+    try:
+        from app.worker.celery_tasks import deliver_webhook_task
+        deliver_webhook_task.delay(
+            url=url,
+            secret=secret,
+            payload=payload,
+            event_type=event_type,
+        )
+    except (ImportError, AttributeError) as import_err:
+        print(f"[Webhook] Could not dispatch async task (falling back to sync): {import_err}", flush=True)
+        # Fallback: deliver synchronously so the webhook is never silently dropped
+        try:
+            deliver_webhook(url=url, secret=secret, payload=payload, event_type=event_type)
+        except Exception as sync_err:
+            print(f"[Webhook] Sync fallback delivery also failed: {sync_err}", flush=True)
     
     return {"status": "dispatched", "url": url}

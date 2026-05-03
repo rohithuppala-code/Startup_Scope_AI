@@ -12,6 +12,8 @@ import uuid as uuid_module
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from realtime_groups.backend.core.supabase_client import get_supabase
 from realtime_groups.backend.schemas.social import SynthesisResponse, SupabaseWebhookPayload
@@ -19,6 +21,7 @@ from realtime_groups.backend.services import synthesis_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["AI Synthesis & Moderation Webhooks"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def get_current_user_id(
@@ -42,7 +45,9 @@ async def get_current_user_id(
         "actionable founder takeaways."
     ),
 )
+@limiter.limit("5/minute")
 async def synthesize_post_thread(
+    request: Request,
     post_id: str,
     current_user_id: str = Depends(get_current_user_id),
 ) -> dict:

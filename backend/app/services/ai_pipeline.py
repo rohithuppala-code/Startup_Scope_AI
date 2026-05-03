@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 # =====================================================================
 
 _firecrawl_app: FirecrawlApp | None = None
-_gemini_client: genai.Client | None = None
+_gemini_clients: Dict[str, genai.Client] = {}
 _groq_client: Groq | None = None
 
 
@@ -66,12 +66,24 @@ def _get_firecrawl() -> FirecrawlApp:
     return _firecrawl_app
 
 
-def _get_gemini() -> genai.Client:
-    """Returns the module-level Gemini client singleton."""
-    global _gemini_client
-    if _gemini_client is None:
-        _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    return _gemini_client
+def _get_gemini(task: str = "default") -> genai.Client:
+    """Returns a module-level Gemini client singleton for the specified task."""
+    global _gemini_clients
+    if task not in _gemini_clients:
+        key = settings.GEMINI_API_KEY
+        if task == "embedding" and settings.GEMINI_EMBEDDING:
+            key = settings.GEMINI_EMBEDDING
+        elif task == "reranking" and settings.WEB_RERANKING:
+            key = settings.WEB_RERANKING
+        elif task == "consensus" and settings.MAIN_Consensus_PIPELINE:
+            key = settings.MAIN_Consensus_PIPELINE
+        elif task == "patent" and settings.PATENT:
+            key = settings.PATENT
+        elif task == "temporal" and settings.temporal_memory_comparision:
+            key = settings.temporal_memory_comparision
+        
+        _gemini_clients[task] = genai.Client(api_key=key)
+    return _gemini_clients[task]
 
 
 def _get_groq() -> Groq:
@@ -90,15 +102,7 @@ _ANALYSIS_SYSTEM_PROMPT = (
     "You are an elite Startup Analyst AI. Analyze the provided startup idea "
     "and any competitor/market data with surgical precision.\n\n"
     "You MUST output valid JSON matching this exact schema:\n"
-    "{\n"
-    '  "report": {\n'
-    '    "feasibility_score": <integer 0-100>,\n'
-    '    "market_viability": "<2-4 sentence assessment>",\n'
-    '    "gaps_identified": ["<gap1>", "<gap2>", ...],\n'
-    '    "recommended_approach": "<strategic recommendation>"\n'
-    "  },\n"
-    '  "markdown": "<comprehensive multi-section markdown analysis>"\n'
-    "}\n\n"
+    f"{json.dumps(AIReportResponse.model_json_schema(), indent=2)}\n\n"
     "The 'markdown' field MUST be a long-form, professional report with "
     "sections for Executive Summary, Market Analysis, Competitive Landscape, "
     "SWOT Analysis, Go-to-Market Strategy, and Risks."
@@ -161,30 +165,58 @@ def _parse_ai_response(raw_text: str) -> AIReportResponse:
 
 
 # =====================================================================
-# FIRECRAWL — Competitor Discovery
+# FIRECRAWL — Competitor Discovery (Advanced Pipeline)
+#
+# Delegates to the full Search→Rank→Scrape→Extract→Iterate pipeline
+# in firecrawl_pipeline.py. The old signature is preserved for
+# backward compatibility with celery_tasks.py.
 # =====================================================================
 
 def firecrawl_scrape(idea_description: str) -> Tuple[str, List[str]]:
     """
-    Uses the Firecrawl SDK to search for competitors and alternatives.
+    Backward-compatible wrapper around the advanced Firecrawl pipeline.
 
     Returns:
         Tuple of (concatenated_markdown, list_of_competitor_urls).
-        The URLs are needed downstream by the pricing pipeline (Feature 5).
     """
+    try:
+        from app.services.firecrawl_pipeline import run_firecrawl_pipeline
+        markdown, urls, _features = run_firecrawl_pipeline(idea_description)
+        return markdown, urls
+    except Exception as e:
+        print(f"[Firecrawl] Advanced pipeline failed, using fallback: {e}", flush=True)
+        return _firecrawl_scrape_fallback(idea_description)
+
+
+def firecrawl_scrape_advanced(
+    idea_description: str,
+    target_market: str = "",
+    budget_constraints: str = "",
+) -> Tuple[str, List[str], Dict[str, Any]]:
+    """
+    Full advanced pipeline — returns markdown, URLs, AND extracted features.
+    Called directly by the upgraded celery_tasks.py.
+    """
+    try:
+        from app.services.firecrawl_pipeline import run_firecrawl_pipeline
+        return run_firecrawl_pipeline(idea_description, target_market, budget_constraints)
+    except Exception as e:
+        print(f"[Firecrawl] Advanced pipeline failed: {e}", flush=True)
+        md, urls = _firecrawl_scrape_fallback(idea_description)
+        return md, urls, {"competitors": []}
+
+
+def _firecrawl_scrape_fallback(idea_description: str) -> Tuple[str, List[str]]:
+    """Original single-query Firecrawl search as a fallback."""
     try:
         app = _get_firecrawl()
         search_query = f"competitors alternatives to {idea_description[:100]}"
-
-        print(f"[Firecrawl] Searching: {search_query}", flush=True)
+        print(f"[Firecrawl] Fallback searching: {search_query}", flush=True)
         response = app.search(query=search_query, limit=5)
-        print("[Firecrawl] Search finished.", flush=True)
 
         competitor_results: List[str] = []
         competitor_urls: List[str] = []
 
-        # Firecrawl v1 SDK: results in response.data
-        # Older SDK: results in response.web
         results_list = None
         if hasattr(response, "data") and response.data:
             results_list = response.data
@@ -212,7 +244,7 @@ def firecrawl_scrape(idea_description: str) -> Tuple[str, List[str]]:
         return "\n\n---\n\n".join(competitor_results), competitor_urls
 
     except Exception as e:
-        print(f"[Firecrawl] API error: {e}", flush=True)
+        print(f"[Firecrawl] Fallback API error: {e}", flush=True)
         return "Firecrawl search failed or timed out. Competitor data unavailable.", []
 
 
@@ -236,7 +268,7 @@ def embed_text(text: str) -> List[float]:
     Returns an empty list on failure (caller must handle gracefully).
     """
     try:
-        client = _get_gemini()
+        client = _get_gemini(task="embedding")
         
         # Feature 18: OpenTelemetry Tracking
         with track_ai_call("gemini-embedding-001", operation="embed") as ai_span:
@@ -301,7 +333,7 @@ def generate_gemini_report(
     Returns:
         Tuple of (report_json, markdown_report, total_tokens, estimated_cost, model_name).
     """
-    client = _get_gemini()
+    client = _get_gemini(task="consensus")
 
     # Build the user prompt with optional RAG grounding context
     user_prompt_parts = [f"Startup Idea: {idea_description}"]
@@ -312,8 +344,10 @@ def generate_gemini_report(
     user_prompt_parts.append(f"\n\nLive Competitor Data:\n{competitor_data}")
     user_prompt = "\n".join(user_prompt_parts)
 
-    # Models to try in order (rate-limit cascade)
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    # Models to try in order (rate-limit cascade).
+    # gemini-1.5-flash was REMOVED — it returns 404 on the v1beta API.
+    # gemini-2.0-flash-lite is the valid lightweight fallback on v1beta.
+    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
     last_error: Exception | None = None
 
     for model_name in models_to_try:

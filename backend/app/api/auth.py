@@ -11,8 +11,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
-# Service-role client for auth operations
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+# BUG FIX: Changed from a module-level eager client to a lazy singleton.
+# The old code created the Supabase client at import time (line 15), which
+# crashes FastAPI startup if .env is missing or settings hasn't fully loaded.
+# This pattern matches all other services (rag.py, export.py, etc.).
+_supabase: Client | None = None
+
+
+def _get_supabase() -> Client:
+    """Returns the lazily-initialized service-role Supabase client singleton."""
+    global _supabase
+    if _supabase is None:
+        _supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+    return _supabase
 
 
 class RegisterRequest(BaseModel):
@@ -28,6 +39,7 @@ def _ensure_profile(user_id: str, email: str, username: str | None = None, full_
     If no username is provided, derives one from email.
     Handles unique constraint on username by appending a suffix.
     """
+    supabase = _get_supabase()
     base_username = (username or email.split("@")[0]).lower().replace(" ", "_")[:28]
     display = full_name or base_username
 
@@ -67,6 +79,7 @@ async def login(request: LoginRequest):
     """
     Authenticates a user with Supabase and ensures a profiles row exists.
     """
+    supabase = _get_supabase()
     try:
         response = supabase.auth.sign_in_with_password({
             "email": request.email,
@@ -103,6 +116,7 @@ async def register(request: RegisterRequest):
     Creates a new user in Supabase Auth and auto-creates their profile row.
     Accepts optional username and full_name.
     """
+    supabase = _get_supabase()
     try:
         response = supabase.auth.sign_up({
             "email": request.email,
@@ -146,6 +160,7 @@ async def ensure_profile_endpoint(request: LoginRequest):
     Emergency endpoint: creates a profile row for an existing auth user.
     Call this if the user's profile is missing.
     """
+    supabase = _get_supabase()
     try:
         response = supabase.auth.sign_in_with_password({
             "email": request.email,
@@ -164,12 +179,17 @@ async def ensure_profile_endpoint(request: LoginRequest):
 
 @router.post("/logout")
 async def logout():
-    """Invalidates a user session in Supabase."""
-    try:
-        supabase.auth.sign_out()
-        return {"message": "Logged out successfully"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Logout failed: {str(e)}"
-        )
+    """
+    Signals a logout intent.
+
+    BUG FIX: The previous implementation called supabase.auth.sign_out()
+    using the SERVICE ROLE client. Service-role clients are not bound to
+    a user session and sign_out() is therefore a no-op (or targets an
+    unexpected session). JWT-based authentication is stateless — the real
+    logout mechanism is for the CLIENT to discard the access_token and
+    refresh_token. On the backend we simply acknowledge the request.
+
+    For production: if you need server-side token revocation, store
+    a token blacklist in Redis keyed by the JWT 'jti' claim.
+    """
+    return {"message": "Logged out successfully. Please discard your tokens on the client side."}

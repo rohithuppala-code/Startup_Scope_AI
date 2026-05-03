@@ -65,6 +65,8 @@ async def get_my_profile(
     # Ensure profile exists before fetching
     await loop.run_in_executor(None, lambda: ensure_profile_exists(sb, current_user_id))
 
+    # BUG FIX: .single() crashes when no profile row exists (new user).
+    # Use .limit(1) + existence guard instead.
     try:
         resp = await loop.run_in_executor(
             None,
@@ -73,7 +75,7 @@ async def get_my_profile(
                 .select("id, username, display_name, bio, avatar_url, karma_score, badges, "
                         "twitter_url, linkedin_url, github_url, website_url, created_at")
                 .eq("id", current_user_id)
-                .single()
+                .limit(1)
                 .execute()
             ),
         )
@@ -83,7 +85,7 @@ async def get_my_profile(
     if not resp.data:
         raise HTTPException(status_code=404, detail="Profile not found.")
 
-    return ProfileResponse(**resp.data)
+    return ProfileResponse(**resp.data[0])
 
 @router.put(
     "/me",
@@ -142,7 +144,7 @@ async def update_my_profile(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    # Re-fetch the updated row
+    # Re-fetch the updated row — .limit(1) avoids crash on edge-case missing row
     try:
         fetch_resp = await loop.run_in_executor(
             None,
@@ -151,7 +153,7 @@ async def update_my_profile(
                 .select("id, username, display_name, bio, avatar_url, karma_score, badges, "
                         "twitter_url, linkedin_url, github_url, website_url, created_at")
                 .eq("id", current_user_id)
-                .single()
+                .limit(1)
                 .execute()
             ),
         )
@@ -165,7 +167,7 @@ async def update_my_profile(
         )
 
     logger.info("[Profile] Updated profile for user=%s fields=%s", current_user_id, list(update_payload.keys()))
-    return ProfileResponse(**fetch_resp.data)
+    return ProfileResponse(**fetch_resp.data[0])
 
 
 # ─── GET /api/v1/profiles/{username} ─────────────────────────────────────────
@@ -188,11 +190,11 @@ async def get_profile(username: str) -> ProfileResponse:
                 .select("id, username, display_name, bio, avatar_url, karma_score, badges, "
                         "twitter_url, linkedin_url, github_url, website_url, created_at")
                 .eq("username", username)
-                .single()
+                .limit(1)
                 .execute()
             ),
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Profile '{username}' not found.",
@@ -204,7 +206,7 @@ async def get_profile(username: str) -> ProfileResponse:
             detail=f"Profile '{username}' not found.",
         )
 
-    return ProfileResponse(**resp.data)
+    return ProfileResponse(**resp.data[0])
 
 
 # ─── GET /api/v1/profiles/{user_id}/validations ──────────────────────────────

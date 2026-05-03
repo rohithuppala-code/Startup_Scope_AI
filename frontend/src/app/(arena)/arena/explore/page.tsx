@@ -74,7 +74,7 @@ export default function ExplorePage() {
     async (targetUserId: string) => {
       if (!userId) return;
       try {
-        await api(`/api/v1/follows/${targetUserId}`, {
+        await api(`/api/v1/profiles/${targetUserId}/follow`, {
           method: "POST",
           userId,
         });

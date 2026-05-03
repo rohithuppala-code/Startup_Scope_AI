@@ -31,7 +31,7 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -47,6 +47,7 @@ from app.worker.celery_beat import BEAT_SCHEDULE, REDBEAT_CONFIG
 # ── Service imports (all Tier 1, 2, & 3 features) ───────────────────
 from app.services.ai_pipeline import (
     firecrawl_scrape,
+    firecrawl_scrape_advanced,
     generate_gemini_report,
     generate_groq_report,
     embed_text,
@@ -64,6 +65,12 @@ from app.services.alerts import process_alert
 from app.services.webhooks import dispatch_validation_webhook, register_webhook_task
 from app.core.telemetry import track_pipeline
 from app.services.cost_guard import check_and_charge_limit, reconcile_cost, CostLimitExceeded
+from app.services.redis_memory import (
+    store_idea_memory,
+    store_idea_embedding,
+    find_similar_ideas,
+    get_similarity_insights,
+)
 
 
 # =====================================================================
@@ -182,6 +189,11 @@ def _extract_competitor_names(competitor_urls: List[str]) -> List[str]:
     name="app.worker.celery_tasks.process_validation",
     max_retries=2,
     acks_late=True,
+    # BUG FIX: Without reject_on_worker_lost=True, if a worker is SIGKILL'd
+    # (OOM, container restart) mid-task, the task is acknowledged but never
+    # completed — it silently disappears. With this flag, the task is
+    # rejected (nacked) and RabbitMQ re-queues it for another worker.
+    reject_on_worker_lost=True,
 )
 def process_validation(self, validation_id: str, idea_hash: str) -> dict:
     """
@@ -213,14 +225,14 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                 supabase.table("validations")
                 .select("status, user_id")
                 .eq("id", validation_id)
-                .single()
+                .limit(1)
                 .execute()
             )
             if not own_row.data:
                 print(f"[Worker] Row {validation_id} not found. Aborting.", flush=True)
                 return {"status": "aborted", "message": "Validation row not found."}
 
-            if own_row.data.get("status") == "completed":
+            if own_row.data[0].get("status") == "completed":
                 print(f"[Worker] Idempotency: {validation_id} already completed.", flush=True)
                 return {"status": "skipped", "message": "Already completed."}
 
@@ -319,15 +331,15 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                 supabase.table("validations")
                 .select("idea_description, target_market, budget_constraints")
                 .eq("id", validation_id)
-                .single()
+                .limit(1)
                 .execute()
             )
             if not row.data:
                 return {"status": "aborted", "message": "Row deleted before processing."}
 
-            idea_description: str = row.data.get("idea_description", "")
-            target_market: str = row.data.get("target_market", "") or ""
-            budget_constraints: str = row.data.get("budget_constraints", "") or ""
+            idea_description: str = row.data[0].get("idea_description", "")
+            target_market: str = row.data[0].get("target_market", "") or ""
+            budget_constraints: str = row.data[0].get("budget_constraints", "") or ""
 
             # Enrich the idea text with context for better analysis
             enriched_idea = idea_description
@@ -340,7 +352,7 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             # Estimate: consensus (Gemini + Groq) + 3 data pipelines (patents, jobs, traffic)
             # Roughly $0.005 estimated cost for the whole flow
             estimated_pipeline_cost = 0.005
-            user_id = own_row.data.get("user_id")
+            user_id = own_row.data[0].get("user_id")
             if user_id:
                 try:
                     check_and_charge_limit(user_id, estimated_pipeline_cost)
@@ -357,10 +369,31 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                     })
                     return {"status": "failed", "message": "Cost limit exceeded."}
 
-            # ── STEP 5: FIRECRAWL COMPETITOR DISCOVERY ───────────────────
-            competitor_data, competitor_urls = firecrawl_scrape(idea_description)
+            # ── STEP 5: ADVANCED FIRECRAWL PIPELINE ──────────────────────
+            # Uses the full Search→Rank→Scrape→Extract→Iterate pipeline.
+            competitor_data, competitor_urls, extracted_features = firecrawl_scrape_advanced(
+                idea_description, target_market, budget_constraints
+            )
             competitor_names = _extract_competitor_names(competitor_urls)
-            print(f"[Worker] Found {len(competitor_urls)} competitor URLs.", flush=True)
+            print(f"[Worker] Found {len(competitor_urls)} competitor URLs, "
+                  f"{len(extracted_features.get('competitors', []))} structured competitors.", flush=True)
+
+            # ── STEP 5b: REDIS SIMILARITY SEARCH ─────────────────────────
+            # Check if similar ideas have been evaluated before.
+            # Inject historical insights into the LLM prompt.
+            idea_embedding_early = embed_text(idea_description)
+            similar_ideas = []
+            similarity_context = ""
+            if idea_embedding_early:
+                similar_ideas = find_similar_ideas(
+                    query_embedding=idea_embedding_early,
+                    exclude_id=validation_id,
+                    top_k=3,
+                    min_similarity=0.7,
+                )
+                if similar_ideas:
+                    similarity_context = get_similarity_insights(similar_ideas)
+                    print(f"[Worker] 🧠 Found {len(similar_ideas)} similar past ideas.", flush=True)
 
             # ── STEP 6: RAG — CHUNK + EMBED + STORE ─────────────────────
             chunks = chunk_text(competitor_data, chunk_size_tokens=500)
@@ -377,6 +410,10 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                 validation_id=validation_id,
                 top_k=10,
             )
+
+            # Append similarity context from Redis memory
+            if similarity_context:
+                grounding_context += f"\n\n{similarity_context}"
 
             # ── STEP 8: PARALLEL AI — GEMINI + GROQ (with self-heal) ────
             # Both are I/O-bound HTTP calls. Run in parallel via ThreadPool.
@@ -501,12 +538,16 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                         validation_id=validation_id,
                     )
 
-                futures["sentiment"] = executor.submit(
-                    run_sentiment_pipeline,
-                    competitor_names=competitor_names,
-                    idea_description=idea_description,
-                    validation_id=validation_id,
-                )
+                # BUG FIX: Only submit sentiment if we actually have competitor names.
+                # Previously this always ran even with an empty list, producing
+                # meaningless Neutral results stored unnecessarily in Supabase.
+                if competitor_names:
+                    futures["sentiment"] = executor.submit(
+                        run_sentiment_pipeline,
+                        competitor_names=competitor_names,
+                        idea_description=idea_description,
+                        validation_id=validation_id,
+                    )
 
                 # Feature 8: Patent & IP scan
                 futures["patents"] = executor.submit(
@@ -539,39 +580,53 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                 # its future resolves, not after all futures finish.
                 future_to_name = {v: k for k, v in futures.items()}
 
-                for completed_future in as_completed(futures.values(), timeout=180):
-                    name = future_to_name.get(completed_future, "unknown")
-                    try:
-                        result = completed_future.result()
+                # BUG FIX: A TimeoutError from as_completed() previously
+                # propagated up as an unhandled exception, causing the entire
+                # task to be retried even when the AI consensus already
+                # succeeded and only one slow data pipeline timed out.
+                # We now catch TimeoutError here, log it, and continue to
+                # the final write-through step with whatever results we have.
+                try:
+                    for completed_future in as_completed(futures.values(), timeout=180):
+                        name = future_to_name.get(completed_future, "unknown")
+                        try:
+                            result = completed_future.result()
 
-                        # Store the result in the appropriate variable
-                        if name == "pricing":
-                            pricing_report = result
-                        elif name == "funding":
-                            funding_report = result
-                        elif name == "sentiment":
-                            sentiment_report = result
-                        elif name == "patents":
-                            patent_report = result
-                        elif name == "jobs":
-                            jobs_report = result
-                        elif name == "traffic":
-                            traffic_report = result
+                            # Store the result in the appropriate variable
+                            if name == "pricing":
+                                pricing_report = result
+                            elif name == "funding":
+                                funding_report = result
+                            elif name == "sentiment":
+                                sentiment_report = result
+                            elif name == "patents":
+                                patent_report = result
+                            elif name == "jobs":
+                                jobs_report = result
+                            elif name == "traffic":
+                                traffic_report = result
 
-                        # ── STREAM THIS SECTION IMMEDIATELY ──────────────
-                        # The frontend receives this partial payload and can
-                        # render the section before the full pipeline is done.
-                        section_data = result.model_dump() if hasattr(result, "model_dump") else {}
-                        _publish_event(validation_id, {
-                            "validation_id": validation_id,
-                            "status": "processing",
-                            "section": name,
-                            "data": section_data,
-                        })
-                        print(f"[Worker] ⚡ Streamed '{name}' section for {validation_id}.", flush=True)
+                            # ── STREAM THIS SECTION IMMEDIATELY ──────────────
+                            # The frontend receives this partial payload and can
+                            # render the section before the full pipeline is done.
+                            section_data = result.model_dump() if hasattr(result, "model_dump") else {}
+                            _publish_event(validation_id, {
+                                "validation_id": validation_id,
+                                "status": "processing",
+                                "section": name,
+                                "data": section_data,
+                            })
+                            print(f"[Worker] ⚡ Streamed '{name}' section for {validation_id}.", flush=True)
 
-                    except Exception as e:
-                        print(f"[Worker] {name.title()} pipeline failed (non-fatal): {e}", flush=True)
+                        except Exception as e:
+                            print(f"[Worker] {name.title()} pipeline failed (non-fatal): {e}", flush=True)
+
+                except FutureTimeoutError:
+                    print(
+                        f"[Worker] ⏱️ Data pipeline timeout for {validation_id}. "
+                        "Proceeding with partial results (consensus already complete).",
+                        flush=True,
+                    )
 
             # ── STEP 11: TEMPORAL VERSION TRACKING ───────────────────────
             temporal_diff = run_temporal_comparison(
@@ -594,7 +649,57 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             )
 
             # ── STEP 12: WRITE-THROUGH TO SUPABASE ──────────────────────
-            idea_embedding = embed_text(idea_description)
+            # Reuse early embedding if we computed it; otherwise compute now
+            idea_embedding = idea_embedding_early if idea_embedding_early else embed_text(idea_description)
+
+            # ── STEP 12b: REDIS MEMORY STORAGE ──────────────────────────
+            # Store in the three-tier Redis memory system for future
+            # cross-referencing and similarity detection.
+            try:
+                report_gaps = final_report_json.get("gaps_identified", []) if isinstance(final_report_json, dict) else []
+                report_score = final_report_json.get("feasibility_score", 0) if isinstance(final_report_json, dict) else 0
+                extracted_competitors = [
+                    c.get("name", "") for c in extracted_features.get("competitors", [])
+                    if c.get("name")
+                ]
+
+                store_idea_memory(
+                    validation_id=validation_id,
+                    idea_description=idea_description,
+                    competitors=extracted_competitors or competitor_names,
+                    gaps=report_gaps,
+                    feasibility_score=report_score,
+                    report_summary=final_markdown[:500] if final_markdown else "",
+                    user_id=user_id or "",
+                )
+
+                if idea_embedding:
+                    store_idea_embedding(
+                        validation_id=validation_id,
+                        embedding=idea_embedding,
+                        idea_description=idea_description,
+                        feasibility_score=report_score,
+                    )
+
+                print(f"[Worker] 🧠 Stored idea in Redis memory (score: {report_score}).", flush=True)
+            except Exception as mem_err:
+                print(f"[Worker] Redis memory storage failed (non-fatal): {mem_err}", flush=True)
+
+            # ── AGGREGATE ALL DATA INTO REPORT JSON ─────────────────────
+            # The frontend relies on `report_json` containing the FULL suite of data.
+            # Map the data pipelines and consensus fields to the keys the UI expects.
+            final_report_json["market_analysis"] = final_report_json.get("market_viability", "No market data available.")
+            final_report_json["competitor_analysis"] = final_report_json.get("gaps_identified", [])
+            final_report_json["pricing"] = pricing_report.model_dump() if pricing_report else None
+            final_report_json["funding"] = funding_report.model_dump() if funding_report else None
+            final_report_json["sentiment"] = sentiment_report.model_dump() if sentiment_report else None
+            final_report_json["patents"] = patent_report.model_dump() if patent_report else None
+            final_report_json["jobs"] = jobs_report.model_dump() if jobs_report else None
+            final_report_json["traffic"] = traffic_report.model_dump() if traffic_report else None
+            final_report_json["consensus"] = {
+                "consensus_confidence": consensus_confidence,
+                "model_version": model_version
+            }
 
             update_payload: Dict[str, Any] = {
                 "status": "completed",

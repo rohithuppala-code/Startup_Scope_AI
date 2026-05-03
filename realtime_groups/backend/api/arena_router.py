@@ -49,8 +49,8 @@ async def publish_idea(body: PublishRequest, current_user_id: str = Depends(get_
     try:
         val_resp = await loop.run_in_executor(
             None,
-            lambda: sb.table("validations").select("id, report_json, status, user_id")
-                .eq("id", str(body.validation_id)).single().execute()
+            lambda: sb.table("validations").select("id, report_json, status, user_id, idea_description")
+                .eq("id", str(body.validation_id)).limit(1).execute()
         )
     except Exception as e:
         logger.error("[Arena] Failed to fetch validation %s: %s", body.validation_id, e)
@@ -58,7 +58,7 @@ async def publish_idea(body: PublishRequest, current_user_id: str = Depends(get_
 
     if not val_resp.data:
         raise HTTPException(404, "Validation report not found.")
-    validation = val_resp.data
+    validation = val_resp.data[0]
     if validation["user_id"] != current_user_id:
         raise HTTPException(403, "You can only publish your own validation reports.")
     if validation["status"] != "completed":
@@ -122,7 +122,11 @@ async def list_posts(
 
     query = (
         sb.table("posts")
-        .select("id, title, author_id, upvote_count, downvote_count, comment_count, tags, created_at, profiles!posts_author_id_fkey(username)")
+        .select(
+            "id, title, content, author_id, upvote_count, downvote_count, "
+            "comment_count, tags, created_at, report_json, validation_id, "
+            "profiles!posts_author_id_fkey(username, avatar_url)"
+        )
         .order(order_col, desc=True)
         .range(offset, offset + page_size - 1)
     )
@@ -134,7 +138,10 @@ async def list_posts(
     for row in (resp.data or []):
         profile_join = row.pop("profiles", {}) or {}
         row["author_username"] = profile_join.get("username", "unknown")
+        row["author_avatar"] = profile_join.get("avatar_url")
         row["karma_score"] = row.get("upvote_count", 0) - row.get("downvote_count", 0)
+        # Ensure content is never None (NOT NULL in schema)
+        row["content"] = row.get("content") or ""
         results.append(ArenaPostSummary(**row))
     return results
 
@@ -147,13 +154,13 @@ async def get_post(post_id: str):
         resp = await loop.run_in_executor(
             None,
             lambda: sb.table("posts").select("*, profiles!posts_author_id_fkey(username, avatar_url, karma_score, badges)")
-                .eq("id", post_id).single().execute()
+                .eq("id", post_id).limit(1).execute()
         )
     except Exception:
         raise HTTPException(404, "Post not found.")
     if not resp.data:
         raise HTTPException(404, "Post not found.")
-    return resp.data
+    return resp.data[0]
 
 
 @router.post("/posts/{post_id}/vote", response_model=VoteResponse, summary="Vote on an Arena post")
@@ -199,10 +206,10 @@ async def vote_on_post(
         try:
             post_resp = await loop.run_in_executor(
                 None,
-                lambda: sb.table("posts").select("author_id").eq("id", post_id).single().execute()
+                lambda: sb.table("posts").select("author_id").eq("id", post_id).limit(1).execute()
             )
             if post_resp.data:
-                asyncio.create_task(reputation_engine.reward_upvote(post_resp.data["author_id"]))
+                asyncio.create_task(reputation_engine.reward_upvote(post_resp.data[0]["author_id"]))
         except Exception:
             pass  # Non-fatal: karma reward is best-effort
 
@@ -223,14 +230,15 @@ async def vote_on_poll(
         poll_resp = await loop.run_in_executor(
             None,
             lambda: sb.table("polls").select("id, options")
-                .eq("id", str(body.poll_id)).eq("post_id", post_id).single().execute()
+                .eq("id", str(body.poll_id)).eq("post_id", post_id).limit(1).execute()
         )
     except Exception:
         raise HTTPException(404, "Poll not found for this post.")
     if not poll_resp.data:
         raise HTTPException(404, "Poll not found for this post.")
+    poll_data = poll_resp.data[0]
 
-    options = poll_resp.data.get("options", [])
+    options = poll_data.get("options", [])
     valid_option_ids = {opt["id"] for opt in options}
     if body.option_id not in valid_option_ids:
         raise HTTPException(400, f"Invalid option_id. Valid options: {list(valid_option_ids)}")
@@ -259,17 +267,14 @@ async def synthesize_post(
     sb = get_supabase()
     loop = asyncio.get_running_loop()
 
-    try:
-        post_resp = await loop.run_in_executor(
-            None,
-            lambda: sb.table("posts").select("*").eq("id", post_id).single().execute()
-        )
-    except Exception:
+    # BUG FIX: .single() crashes on bad post_id; use .limit(1)
+    post_resp = await loop.run_in_executor(
+        None,
+        lambda: sb.table("posts").select("*").eq("id", post_id).limit(1).execute()
+    )
+    if not post_resp.data:
         raise HTTPException(404, "Post not found.")
-    
-    post_data = post_resp.data
-    if not post_data:
-        raise HTTPException(404, "Post not found.")
+    post_data = post_resp.data[0]
 
     title = post_data.get("title", "")
     content = post_data.get("content", "")
@@ -359,11 +364,11 @@ async def create_post_comment(
 ):
     sb = get_supabase()
     loop = asyncio.get_running_loop()
-    
+
     content = body.get("content", "").strip()
     if not content:
         raise HTTPException(400, "Comment cannot be empty")
-        
+
     try:
         resp = await loop.run_in_executor(
             None,
@@ -373,27 +378,42 @@ async def create_post_comment(
                 "content": content
             }).execute()
         )
-        
-        # Increment comment count
-        await loop.run_in_executor(
-            None,
-            lambda: sb.rpc("increment_comment_count", {"post_id_val": post_id}).execute()
-        )
-        
+        if not resp.data:
+            raise HTTPException(500, "Failed to post comment")
+
         row = resp.data[0]
-        
-        prof_resp = await loop.run_in_executor(
-            None,
-            lambda: sb.table("profiles").select("username").eq("id", current_user_id).single().execute()
-        )
-        username = prof_resp.data.get("username", "unknown") if prof_resp.data else "unknown"
-        
+
+        # Increment comment count — best-effort, non-fatal
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: sb.rpc("increment_comment_count", {"post_id_val": post_id}).execute()
+            )
+        except Exception as rpc_err:
+            logger.warning("[Arena] increment_comment_count RPC failed (non-fatal): %s", rpc_err)
+
+        # BUG FIX: .single() on profiles crashes when no profile row exists.
+        # Use .limit(1) with a safe fallback username.
+        username = "unknown"
+        try:
+            prof_resp = await loop.run_in_executor(
+                None,
+                lambda: sb.table("profiles").select("username")
+                    .eq("id", current_user_id).limit(1).execute()
+            )
+            if prof_resp.data:
+                username = prof_resp.data[0].get("username", "unknown") or "unknown"
+        except Exception as prof_err:
+            logger.warning("[Arena] Profile lookup failed for %s (using 'unknown'): %s", current_user_id, prof_err)
+
         return {
             "id": row.get("id"),
             "content": row.get("content"),
             "created_at": row.get("created_at"),
             "author_username": username
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to post comment: {e}")
+        logger.error("[Arena] Failed to post comment for post=%s user=%s: %s", post_id, current_user_id, e)
         raise HTTPException(500, "Failed to post comment")

@@ -1,0 +1,234 @@
+# StartupScope AI — Full-Stack API Audit Report
+> Generated: 2026-05-03 | Scope: All frontend API calls vs. backend route definitions
+
+---
+
+## Summary
+
+| Severity | Count | Description |
+|----------|-------|-------------|
+| 🔴 **CRITICAL BUG** | 3 | Will cause runtime errors or silent failures |
+| 🟠 **MISMATCH** | 3 | Wrong HTTP method, endpoint path, or param format |
+| 🟡 **WARNING** | 4 | Hardcoded URLs, auth header inconsistency |
+| ✅ **CORRECT** | 28+ | Properly mapped and functioning |
+
+---
+
+## 🔴 CRITICAL BUGS
+
+### BUG 1 — `workspace_router.py` line 300: `.data.get()` on a list crashes at runtime
+
+**File:** `backend/app/api/workspace_router.py:300`
+
+```python
+# BUGGY — membership.data is a LIST, not a dict
+inviter_role = membership.data.get("role", "viewer")
+```
+
+`membership.data` from `.limit(1).execute()` is always a **list** (e.g. `[{"role": "owner"}]`). Calling `.get()` on a list raises `AttributeError`. This means **every invite call fails with a 500** even when the caller is an owner.
+
+**Fix:**
+```python
+# CORRECT
+inviter_role = membership.data[0].get("role", "viewer")
+```
+
+---
+
+### BUG 2 — `groups/page.tsx`: Create Hub sends params as query string, not JSON body
+
+**File:** `frontend/src/app/(arena)/arena/groups/page.tsx:76-79`
+
+```typescript
+// BUGGY — name & description sent as query params
+const hub = await api<Hub>(
+  `/api/v1/hubs?name=${encodeURIComponent(newGroupName.trim())}&description=${encodeURIComponent(newGroupDescription.trim())}`,
+  { method: "POST", userId }
+);
+```
+
+**Backend expects:** `POST /api/v1/hubs` with `name` and `description` as **FastAPI Query params** (not body), which is correct per `community_router.py:184`:
+```python
+async def create_hub(request: Request, name: str, description: str = "", ...)
+```
+
+✅ Actually this IS correct (FastAPI reads them from query string). BUT the `api()` wrapper always sets `Content-Type: application/json` and FastAPI may reject the call if it expects Query params differently. **However** — because these are declared as `Query` params in FastAPI, the current implementation actually works. Mark as ✅ CORRECT.
+
+---
+
+### BUG 2 (revised) — `arena_router.py` POST comments uses wrong table name
+
+**File:** `realtime_groups/backend/api/arena_router.py:375`
+
+```python
+# BUGGY — writes to "comments" table
+resp = await loop.run_in_executor(None, lambda: sb.table("comments").insert({...}).execute())
+```
+
+But `GET /arena/posts/{post_id}/comments` reads from **`post_comments`** table (line 338):
+```python
+sb.table("post_comments").select("id, author_id, content, created_at, ...")
+```
+
+This means **comments are written to `comments` but read from `post_comments`** — comments will appear to silently disappear after submission since the write and read target different tables.
+
+**Fix:** Change line 375 to `sb.table("post_comments")`.
+
+---
+
+### BUG 3 — `ChatTimeline.tsx` line 188: File upload uses hardcoded `127.0.0.1:8000`
+
+**File:** `frontend/src/app/(arena)/arena/components/ChatTimeline.tsx:188`
+
+```typescript
+// BUGGY — hardcoded URL instead of NEXT_PUBLIC_API_URL
+const res = await fetch(`http://127.0.0.1:8000/api/v1/uploads/chat`, {
+  method: "POST",
+  headers: { "x-user-id": userId },
+  body: formData,
+});
+```
+
+- **Problem 1:** The header is `x-user-id` (lowercase), but the backend `community_router.py` expects `X-User-Id` alias. FastAPI/HTTP are case-insensitive for headers, so this technically works, but it bypasses the `api()` helper entirely.
+- **Problem 2:** URL is hardcoded to `127.0.0.1:8000`. Will break in any non-localhost environment (staging, production, docker with different network).
+
+**Fix:** Use the `api()` helper with `FormData` support, or at minimum use `process.env.NEXT_PUBLIC_API_URL`:
+```typescript
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const res = await fetch(`${API_BASE}/api/v1/uploads/chat`, { ... });
+```
+
+---
+
+## 🟠 MISMATCHES
+
+### MISMATCH 1 — `explore/page.tsx`: Follow uses wrong endpoint
+
+**File:** `frontend/src/app/(arena)/arena/explore/page.tsx:77`
+
+```typescript
+// Frontend calls:
+await api(`/api/v1/follows/${targetUserId}`, { method: "POST", userId });
+```
+
+**Backend has two follow endpoints:**
+1. `search_router.py` → `POST /api/v1/follows/{user_id}` ✅ (correct)
+2. `profile_router.py` → `POST /api/v1/profiles/{user_id}/follow` (different path)
+
+The layout sidebar's `SuggestedFoundersSection` calls **`/api/v1/profiles/${targetUserId}/follow`** (arena layout line 364), while explore page calls **`/api/v1/follows/${targetUserId}`**. Both backends exist, so neither is broken. But they're **inconsistent** — two different endpoints for the same action. The `search_router.py` version upserts without toggle; the `profile_router.py` version toggles (follow/unfollow). This could lead to state desync.
+
+**Recommendation:** Standardize to one endpoint across all pages.
+
+---
+
+### MISMATCH 2 — `profile/page.tsx`: Fetches posts via `/profiles/{user_id}/validations` but backend returns Arena posts
+
+**File:** `frontend/src/app/(arena)/arena/profile/page.tsx:77`
+
+```typescript
+const postsData = await api<Post[]>(`/api/v1/profiles/${userId}/validations`);
+```
+
+Backend `profile_router.py:220` returns `ArenaPostSummary` from the `posts` table. The frontend `Post` interface used here (lines 33-43 in profile page) is a **local type** that's missing `content`, `author_id`, and `validation_id` fields that `ArenaPostSummary` includes. This won't crash, but extra fields are silently discarded and `LiveIdeaCard` won't receive `validationId`, disabling the streaming feature on profile-page cards.
+
+---
+
+### MISMATCH 3 — `dm_router.py` conflicts with `community_router.py`: Duplicate `POST /api/v1/messages/dm`
+
+Both routers define the same endpoint:
+- `dm_router.py:132` → `POST /api/v1/messages/dm` (returns `{"channel_id": str}`)
+- `community_router.py:358` → `POST /api/v1/messages/dm` (returns `DMInitResponse` with UUID `channel_id`)
+
+FastAPI will use **whichever router is registered first**. `social_app.py` registers `dm_router` before `community_router`, so `dm_router` wins. But `community_router`'s version returns a Pydantic UUID type while `dm_router` returns a raw string — the frontend expects `{ channel_id: string }` which matches `dm_router`. **However**, this is a latent fragility that could cause issues if router order changes.
+
+---
+
+## 🟡 WARNINGS
+
+### WARNING 1 — `api.ts`: Auth via `x-user-id` header is not JWT-backed
+
+**File:** `frontend/src/lib/api.ts:16`
+
+```typescript
+if (userId) headers["x-user-id"] = userId;
+```
+
+All endpoints using `x-user-id` for auth are trusting a client-supplied UUID with no signature verification. This is acceptable for development but is a security risk for production. The `workspace_router.py` uses JWT Bearer auth, but most social routers don't.
+
+---
+
+### WARNING 2 — `use-websocket.ts`: Falls back to bare `fetch()` not using `api()` helper
+
+**File:** `frontend/src/hooks/use-websocket.ts:110-111`
+
+```typescript
+const res = await fetch(`${API_BASE}/api/v1/validate/${vid}/status`)
+  .catch(() => fetch(`${API_BASE}/api/v1/validate/${vid}`));
+```
+
+The fallback (authed endpoint) is called **without any auth headers** — it would fail with a 422/401 from `rate_limit_user` dependency. The public `/status` endpoint is fine (no auth required), but the fallback path is broken.
+
+---
+
+### WARNING 3 — `groups/page.tsx` `joinHub`: Response type mismatch
+
+**File:** `frontend/src/app/(arena)/arena/groups/page.tsx:56`
+
+```typescript
+await api<{ message: string; already_member: boolean }>(`/api/v1/hubs/${hubId}/join`, { method: "POST", userId })
+```
+
+Backend `join_hub_atomic` RPC result is accessed as `result.get("already_member", False)` which may not always be present if the RPC returns null/empty. The frontend silently ignores the response (only reads `already_member` in backend logs), so this is non-critical.
+
+---
+
+### WARNING 4 — `LiveIdeaCard.tsx` line 459/465: Dual summarize paths may both fail
+
+**File:** `frontend/src/app/(arena)/arena/components/LiveIdeaCard.tsx:459,465`
+
+The card tries `POST /api/v1/validate/{vid}/summarize` first, then falls back to `POST /api/v1/arena/posts/{postId}/synthesize`. Both are correct endpoints. But `summarize` requires no auth (`main.py:432`) while `synthesize` requires `X-User-Id`. The LiveIdeaCard may not pass `userId` consistently, so synthesize could fail silently.
+
+---
+
+## ✅ VERIFIED CORRECT MAPPINGS
+
+| Frontend Call | Backend Endpoint | Status |
+|---|---|---|
+| `POST /api/v1/validate` | `main.py:134` | ✅ |
+| `GET /api/v1/validate/{id}/status` | `main.py:386` | ✅ |
+| `GET /api/v1/validate/{id}` | `main.py:287` | ✅ |
+| `GET /api/v1/validations?status=completed` | `main.py:250` | ✅ |
+| `POST /api/v1/chat/{validation_id}` | `chat_router.py:187` | ✅ |
+| `GET /api/v1/export/{id}/pdf` | `export_router.py:35` | ✅ |
+| `POST /api/v1/compare` | `comparison_router.py:116` | ✅ |
+| `POST /api/v1/arena/publish` | `arena_router.py:43` | ✅ |
+| `GET /api/v1/arena/posts` | `arena_router.py:111` | ✅ |
+| `GET /api/v1/arena/posts/{id}` | `arena_router.py:149` | ✅ |
+| `POST /api/v1/arena/posts/{id}/vote` | `arena_router.py:166` | ✅ |
+| `GET /api/v1/arena/posts/{id}/comments` | `arena_router.py:328` | ✅ |
+| `POST /api/v1/arena/posts/{id}/synthesize` | `arena_router.py:262` | ✅ |
+| `POST /api/v1/validate/{id}/summarize` | `main.py:432` | ✅ |
+| `GET /api/v1/arena/search` | `search_router.py:44` | ✅ |
+| `GET /api/v1/arena/trending` | `search_router.py:96` | ✅ |
+| `GET /api/v1/arena/suggested-founders` | `search_router.py:162` | ✅ |
+| `GET /api/v1/profiles/me` | `profile_router.py:54` | ✅ |
+| `PUT /api/v1/profiles/me` | `profile_router.py:90` | ✅ |
+| `GET /api/v1/profiles/{user_id}/validations` | `profile_router.py:214` | ✅ |
+| `POST /api/v1/profiles/{id}/follow` | `profile_router.py:250` | ✅ |
+| `GET /api/v1/messages/conversations` | `dm_router.py:40` | ✅ |
+| `POST /api/v1/messages/dm` | `dm_router.py:132` | ✅ |
+| `GET /api/v1/hubs` | `community_router.py:107` | ✅ |
+| `GET /api/v1/hubs/joined` | `community_router.py:154` | ✅ |
+| `POST /api/v1/hubs` | `community_router.py:172` | ✅ |
+| `POST /api/v1/hubs/{id}/join` | `community_router.py:320` | ✅ |
+| `GET /api/v1/uploads/chat` (file upload) | `community_router.py:556` | ⚠️ Hardcoded URL |
+
+---
+
+## Required Fixes (Priority Order)
+
+### Fix 1 — `workspace_router.py:300` — LIST not DICT (CRITICAL)
+### Fix 2 — `arena_router.py:375` — Wrong table name for POST comments (CRITICAL)
+### Fix 3 — `ChatTimeline.tsx:188` — Hardcoded URL for file upload (CRITICAL)
+### Fix 4 — `use-websocket.ts:111` — Auth fallback missing headers (WARNING)
+### Fix 5 — `profile/page.tsx` — Post type missing fields for LiveIdeaCard (WARNING)

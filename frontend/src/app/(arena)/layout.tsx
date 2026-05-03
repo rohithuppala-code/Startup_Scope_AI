@@ -34,7 +34,19 @@ export default function ArenaLayout({
   children: React.ReactNode;
 }) {
   const { userId, karma, badges, logout } = useAuth();
+  const { displayName, username, avatarUrl, setProfileInfo } = useUserStore();
   const pathname = usePathname();
+
+  React.useEffect(() => {
+    if (userId && !displayName) {
+      // Fetch profile to populate store
+      import("@/lib/api").then(({ api }) => {
+        api<any>("/api/v1/profiles/me", { userId })
+          .then((p) => setProfileInfo(p.display_name, p.username, p.avatar_url))
+          .catch(console.error);
+      });
+    }
+  }, [userId, displayName, setProfileInfo]);
 
   const getActiveNav = () => {
     if (pathname === "/arena") return "feed";
@@ -110,11 +122,6 @@ export default function ArenaLayout({
                   >
                     <Icon className="w-5 h-5" />
                     <span>{item.label}</span>
-                    {item.id === "messages" && (
-                      <span className="ml-auto relative">
-                        <span className="notification-dot" />
-                      </span>
-                    )}
                   </motion.div>
                 </Link>
               );
@@ -139,11 +146,19 @@ export default function ArenaLayout({
             <div className="glass-card p-3.5">
               <div className="flex items-center gap-2.5 mb-2.5">
                 <div className="avatar avatar-sm">
-                  {userId ? userId.charAt(0).toUpperCase() : "?"}
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="" />
+                  ) : (
+                    displayName?.charAt(0).toUpperCase() || username?.charAt(0).toUpperCase() || userId?.charAt(0).toUpperCase() || "?"
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold truncate text-[var(--text-primary)]">Founder</p>
-                  <p className="text-[10px] text-[var(--text-muted)] truncate">{userId?.slice(0, 8)}...</p>
+                  <p className="text-xs font-semibold truncate text-[var(--text-primary)]">
+                    {displayName || username || "Founder"}
+                  </p>
+                  <p className="text-[10px] text-[var(--text-muted)] truncate">
+                    @{username || userId?.slice(0, 8)}
+                  </p>
                 </div>
               </div>
               <div className="section-divider mb-2" />
@@ -205,10 +220,12 @@ export default function ArenaLayout({
           </AnimatePresence>
         </main>
 
-        {/* ── Right Column: Contextual Intelligence ── */}
-        <aside className="hidden lg:block w-[300px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)]/20 overflow-y-auto">
-          <RightSidebarContent activeNav={activeNav} />
-        </aside>
+        {/* ── Right Column: Contextual Intelligence (Home Only) ── */}
+        {activeNav === "feed" && (
+          <aside className="hidden lg:block w-[300px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)]/20 overflow-y-auto">
+            <RightSidebarContent activeNav={activeNav} />
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -322,8 +339,11 @@ function TrendingSection() {
 }
 
 function SuggestedFoundersSection() {
+  const userId = useUserStore((s) => s.userId);
   const [founders, setFounders] = React.useState<{id: string; username: string; display_name: string | null; karma_score: number}[]>([]);
   const [loaded, setLoaded] = React.useState(false);
+  const [following, setFollowing] = React.useState<Set<string>>(new Set());
+  const [loadingFollow, setLoadingFollow] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     import("@/lib/api").then(({ api }) => {
@@ -335,6 +355,24 @@ function SuggestedFoundersSection() {
         .finally(() => setLoaded(true));
     });
   }, []);
+
+  const handleFollow = async (targetUserId: string) => {
+    if (!userId || loadingFollow || following.has(targetUserId)) return;
+    setLoadingFollow(targetUserId);
+    try {
+      const { api } = await import("@/lib/api");
+      await api(`/api/v1/profiles/${targetUserId}/follow`, {
+        method: "POST",
+        userId,
+      });
+      setFollowing((prev) => { const next = new Set(prev); next.add(targetUserId); return next; });
+    } catch {
+      // Silently handle — may already be following
+      setFollowing((prev) => { const next = new Set(prev); next.add(targetUserId); return next; });
+    } finally {
+      setLoadingFollow(null);
+    }
+  };
 
   return (
     <div>
@@ -359,14 +397,22 @@ function SuggestedFoundersSection() {
           <p className="text-xs text-[var(--text-muted)]">No founders to suggest yet.</p>
         ) : (
           founders.map((f) => (
-            <div key={f.id} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-white/[0.03] transition-all cursor-pointer">
+            <div key={f.id} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-white/[0.03] transition-all">
               <div className="avatar avatar-sm">{f.username.charAt(0).toUpperCase()}</div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-[var(--text-primary)] truncate">{f.display_name || f.username}</p>
                 <p className="text-[10px] text-[var(--text-muted)]">@{f.username} · ⚡{f.karma_score}</p>
               </div>
-              <button className="text-[10px] px-2.5 py-1 rounded-lg bg-[var(--accent-violet)]/10 text-[var(--accent-violet)] font-medium hover:bg-[var(--accent-violet)]/20 transition-colors">
-                Follow
+              <button
+                onClick={() => handleFollow(f.id)}
+                disabled={following.has(f.id) || loadingFollow === f.id}
+                className={`text-[10px] px-2.5 py-1 rounded-lg font-medium transition-colors disabled:cursor-default ${
+                  following.has(f.id)
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    : "bg-[var(--accent-violet)]/10 text-[var(--accent-violet)] hover:bg-[var(--accent-violet)]/20"
+                }`}
+              >
+                {loadingFollow === f.id ? "..." : following.has(f.id) ? "✓ Following" : "Follow"}
               </button>
             </div>
           ))

@@ -33,6 +33,8 @@ interface Profile {
 interface Post {
   id: string;
   title: string;
+  content: string;
+  author_id: string;
   author_username: string;
   karma_score: number;
   upvote_count: number;
@@ -40,6 +42,8 @@ interface Post {
   comment_count: number;
   tags: string[];
   created_at: string;
+  validation_id?: string | null;
+  report_json?: Record<string, unknown> | null;
 }
 
 export default function ProfilePage() {
@@ -103,6 +107,7 @@ export default function ProfilePage() {
         body: payload,
       });
       setProfile(updated);
+      useUserStore.getState().setProfileInfo(updated.display_name || null, updated.username, updated.avatar_url || null);
       setEditing(false);
     } catch (err) {
       console.error("[Profile] Save error:", err);
@@ -311,6 +316,9 @@ export default function ProfilePage() {
                 tags={post.tags}
                 createdAt={post.created_at}
                 karmaScore={post.karma_score}
+                content={post.content}
+                validationId={post.validation_id}
+                reportJson={post.report_json}
                 initialPhase="interactive"
               />
             ))}

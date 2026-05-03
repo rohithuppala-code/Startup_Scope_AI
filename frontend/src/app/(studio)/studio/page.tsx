@@ -109,6 +109,7 @@ export default function StudioPage() {
       window.open(res.download_url, "_blank");
     } catch (err) {
       console.error("Export error:", err);
+      alert("Failed to generate PDF. Please ensure the validation is complete.");
     }
   };
 

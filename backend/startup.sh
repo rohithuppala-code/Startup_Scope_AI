@@ -15,9 +15,11 @@ export GRPC_ENABLE_FORK_SUPPORT=1
 cleanup() {
     echo ""
     echo "🛑 Shutting down backend..."
-    [ -n "$CELERY_WORKER_PID" ] && kill $CELERY_WORKER_PID 2>/dev/null
-    [ -n "$CELERY_BEAT_PID" ]   && kill $CELERY_BEAT_PID 2>/dev/null
-    [ -n "$UVICORN_PID" ]       && kill $UVICORN_PID 2>/dev/null
+    [ -n "$CELERY_WORKER_PID" ] && kill -9 $CELERY_WORKER_PID 2>/dev/null
+    [ -n "$CELERY_BEAT_PID" ]   && kill -9 $CELERY_BEAT_PID 2>/dev/null
+    [ -n "$UVICORN_PID" ]       && kill -9 $UVICORN_PID 2>/dev/null
+    pkill -9 -f "celery worker" 2>/dev/null || true
+    pkill -9 -f "celery beat" 2>/dev/null || true
     wait 2>/dev/null
     echo "✅ Backend stopped."
     exit 0
@@ -33,8 +35,10 @@ echo "🐳 [1/4] Starting Docker infrastructure..."
 (cd "$SCRIPT_DIR" && docker compose up -d 2>&1) || echo "⚠️  Docker skipped (may already be running)"
 sleep 2
 
-# 2. Celery Worker
+# 2. Celery Worker (Clear stale workers first)
 echo "⚙️  [2/4] Starting Celery worker..."
+pkill -9 -f "celery worker" 2>/dev/null || true
+sleep 1
 (cd "$SCRIPT_DIR" && celery -A app.worker.celery_tasks.celery_app worker \
     --loglevel=info --concurrency=2 2>&1 | sed 's/^/  [worker] /') &
 CELERY_WORKER_PID=$!
@@ -51,6 +55,12 @@ sleep 1
 
 # 4. FastAPI (includes realtime_groups social routers)
 echo "🌐 [4/4] Starting FastAPI on :8000..."
+
+# Make sure port 8000 is free before starting
+echo "   Checking for existing processes on port 8000..."
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+sleep 1
+
 (cd "$SCRIPT_DIR" && uvicorn app.main:app \
     --host 127.0.0.1 --port 8000 --log-level info 2>&1 | sed 's/^/  [api] /') &
 UVICORN_PID=$!

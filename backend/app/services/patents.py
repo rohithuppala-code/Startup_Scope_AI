@@ -62,7 +62,7 @@ def _extract_patent_keywords(idea_description: str) -> List[str]:
     Falls back to splitting the idea into 3-word chunks on failure.
     """
     try:
-        client = _get_gemini()
+        client = _get_gemini(task="patent")
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=idea_description,
@@ -171,7 +171,7 @@ def _query_uspto(keywords: List[str]) -> List[Dict[str, Any]]:
     # -------------------------------------------------------------------------
     try:
         print("[Patents] Using Gemini to query patent knowledge...", flush=True)
-        client = _get_gemini()
+        client = _get_gemini(task="patent")
         fallback_prompt = (
             f"The user searched the USPTO for patents related to these keywords: {keywords}.\n"
             "Identify 3 real-world, well-known patents related to this technology from your training data.\n"
@@ -304,7 +304,7 @@ def _analyze_ip_landscape(
     if not patents:
         return "No relevant patents found. The IP landscape appears clear for this idea."
 
-    client = _get_gemini()
+    client = _get_gemini(task="patent")
 
     patents_summary = "\n".join(
         f"- **{p.title}** (US{p.patent_number}, {p.filing_date})\n"
