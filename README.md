@@ -22,21 +22,22 @@
 ## ✨ Features
 
 ### 🧠 Advanced AI Validation Engine
-- **Multi-Model Consensus:** Leverages multiple LLMs (Gemini, Groq, Claude) to provide balanced, bias-reduced evaluations of your startup idea.
-- **Conversational RAG (Ask Your Report):** Chat directly with your validation report. Our backend uses `pgvector` to semantically search and ground the AI's responses in real market data.
-- **Idea Comparison:** Pit multiple startup ideas against each other. The AI acts as a VC judge, scoring them on capital efficiency, technical difficulty, and market size.
+- **Multi-Model Consensus:** Leverages Gemini (1.5 Pro / 2.5 Flash) for deep analysis and Groq (Llama 3.1 70B) for speed/fallback, merging outputs to provide balanced, bias-reduced evaluations.
+- **Self-Healing Structured Output:** Built-in auto-correction loop that catches malformed AI outputs and re-prompts models with exact Pydantic schemas until validation succeeds.
+- **Conversational RAG (Ask Your Report):** Uses native 768-dimensional Gemini `text-embedding-004` vectors stored in `pgvector` to semantically search and ground the AI's responses in real market data.
+- **Three-Tier Redis Memory Storage:** Automatically deduplicates requests and injects historical insights from similar past ideas into the AI's context window.
 
 ### 🕵️ Real-Time Intelligence & Web Gathering
-- **Pricing Intelligence:** Automatically scrapes competitor pricing models and highlights gaps in the market.
-- **Funding Intelligence:** Aggregates recent funding rounds of competitors.
+- **Advanced Firecrawl Pipeline:** An intelligent Search → Rank → Scrape → Extract cycle for deep competitor discovery.
+- **Pricing & Funding Intelligence:** Automatically scrapes competitor pricing models and aggregates recent funding rounds.
 - **Patent & IP Moat Scan:** Uses USPTO and EPO open APIs to check for potential patent conflicts or moats.
 - **Job Posting Signal:** Analyzes competitor hiring trends as a proxy for their strategic direction.
-- **Social Sentiment:** Aggregates market buzz from platforms like Reddit, assessing public sentiment towards competitors.
+- **Web Traffic Intelligence:** Extracts competitor traffic and engagement metrics to estimate market share.
 
 ### ⚡ Enterprise-Grade Infrastructure
-- **Progressive Streaming:** Real-time updates pushed directly to the UI via WebSockets and Redis Pub/Sub while the Celery worker crunches data.
-- **Asynchronous Processing:** Robust background task execution using RabbitMQ, Celery, and a priority queue system with dead-letter handling.
-- **Temporal Trend Tracking:** Tracks the evolution of your ideas over time and maintains historical context (Memento).
+- **Progressive Streaming:** Sections of the report (e.g., pricing, funding, patents) are pushed to the UI via WebSockets the *instant* they finish, rather than waiting for the entire pipeline.
+- **Asynchronous Processing:** Robust background orchestration using RabbitMQ, Celery with Priority & Dead Letter Queues, and Distributed Redis Locks.
+- **Cost Guard & Smart Alerts:** Pre-flight cost estimation, API charge reconciliation, and temporal drift tracking that triggers webhooks/alerts when your startup's market landscape changes significantly.
 
 ### 👥 Collaboration & Social
 - **Team Workspaces:** Invite co-founders and advisors with role-based access control (Owner, Editor, Viewer).
@@ -63,34 +64,36 @@ flowchart TB
         API[FastAPI Endpoints]
         WS_Manager[WebSocket Manager]
         Worker[Celery Worker Nodes]
-        AI[AI Pipeline]
+        AI[AI Pipeline (Gemini + Groq)]
     end
 
     subgraph InfraLayer["☁️ Infrastructure & State"]
-        MQ[(RabbitMQ)]
-        Cache[(Redis Cache & Pub/Sub)]
+        MQ[(RabbitMQ + DLQ)]
+        Cache[(Redis: Cache, Locks, Pub/Sub)]
         DB[(Supabase PostgreSQL + pgvector)]
     end
 
     subgraph ExternalLayer["🌐 External APIs"]
         Firecrawl[Firecrawl API]
-        Social[Reddit API]
+        Traffic[Traffic APIs]
         Patents["USPTO / EPO"]
+        Webhooks["Outbound Webhooks"]
     end
 
     UI -->|REST| API
-    WS -->|WebSockets| WS_Manager
+    WS <-->|WebSockets| WS_Manager
     
     API -->|Anchors State| DB
     API -->|Enqueues Task| MQ
     
     MQ -->|Consumes| Worker
     Worker -->|Scrapes| Firecrawl
-    Worker -->|Queries| Social
+    Worker -->|Queries| Traffic
     Worker -->|Queries| Patents
-    Worker -->|Reasons| AI
-    Worker -->|Updates| DB
-    Worker -->|Publishes Event| Cache
+    Worker -->|Reasons & Self-Heals| AI
+    Worker -->|Write-Through| DB
+    Worker -->|Progressive Stream Events| Cache
+    Worker -->|Fires| Webhooks
     
     Cache -->|Subscribes| WS_Manager
 ```
@@ -106,26 +109,24 @@ flowchart TB
     subgraph External["External Entities"]
         Founder("👤 Founder / User")
         Web("🌐 Competitor Web Pages")
-        LLMs("🧠 External LLMs")
+        LLMs("🧠 External LLMs (Gemini, Groq)")
     end
 
     subgraph System["StartupScope AI System"]
-        Core("Core System<br/>• Idea Validation<br/>• Competitor Scouting<br/>• Market Analytics<br/>• RAG & Synthesis")
+        Core("Core System<br/>• Multi-Model Validation<br/>• Progressive Streaming<br/>• Cost Guard<br/>• Temporal Memory")
     end
 
     Founder -->|Submits Startup Idea| Core
     Founder -->|Follow-up Questions| Core
-    Founder -->|Collaboration Invites| Core
     
-    Core -->|Live Status Streams WS| Founder
-    Core -->|Validation Reports| Founder
-    Core -->|Comparison Metrics| Founder
+    Core -->|Progressive WS Streams| Founder
+    Core -->|Final Validations & Webhooks| Founder
 
-    Core -->|Search Intents| Web
-    Web -->|Raw HTML / Pricing| Core
+    Core -->|Search Intents & Scraping| Web
+    Web -->|Raw HTML / Pricing / Traffic| Core
     
     Core -->|Prompts + Context Data| LLMs
-    LLMs -->|Structured Analysis| Core
+    LLMs -->|Structured JSON / Corrected JSON| Core
 
     style Core fill:#8B5CF6,stroke:#EC4899,stroke-width:3px,color:#fff
 ```
@@ -136,66 +137,55 @@ flowchart TB
 flowchart TB
     subgraph Users["👥 Users"]
         Founder[("Founder")]
-        Collaborator[("Collaborator")]
     end
 
-    subgraph Auth["1.0 Auth & Identity"]
-        Login["1.1 Login/Register (Supabase)"]
-        Roles["1.2 Workspace RBAC"]
+    subgraph Orchestration["1.0 Orchestration & State"]
+        API_Gateway["1.1 FastAPI Gateway"]
+        Task_Queue["1.2 RabbitMQ Dispatch"]
+        CostGuard["1.3 Cost Guard & Limits"]
     end
 
-    subgraph Orchestration["2.0 Request Orchestration"]
-        API_Gateway["2.1 FastAPI Gateway"]
-        Task_Queue["2.2 RabbitMQ Dispatch"]
+    subgraph Intelligence["2.0 Intelligence Gathering"]
+        Scraper["2.1 Firecrawl Pipeline"]
+        TrafficEngine["2.2 Web Traffic Insights"]
+        IPEngine["2.3 Patent/IP Scan"]
+        DataPipelines["2.4 Pricing & Funding"]
     end
 
-    subgraph Intelligence["3.0 Intelligence Gathering"]
-        Scraper["3.1 Firecrawl Spider"]
-        SocialEngine["3.2 Social Sentiment"]
-        IPEngine["3.3 Patent/IP Scan"]
-    end
-
-    subgraph Analysis["4.0 Generative Analysis"]
-        Consensus["4.1 Multi-Model Consensus"]
-        RAG["4.2 Vector Context (pgvector)"]
-        Comparator["4.3 Idea Comparison"]
+    subgraph Analysis["3.0 Generative Analysis"]
+        Consensus["3.1 Gemini + Groq Consensus"]
+        SelfHeal["3.2 Self-Healing JSON Loop"]
+        RAG["3.3 Vector Context (pgvector)"]
+        Temporal["3.4 Temporal Versioning"]
     end
 
     subgraph DataStore["💾 Data Stores"]
         D1[("D1: Validations & Reports")]
-        D2[("D2: RAG Chunks (Vectors)")]
-        D3[("D3: Workspaces & Members")]
+        D2[("D2: RAG Embeddings (768-dim)")]
+        D3[("D3: Redis Semantic Memory")]
     end
 
-    Founder -->|Credentials| Login
-    Login -->|JWT| API_Gateway
-    
     Founder -->|Raw Idea| API_Gateway
-    API_Gateway -->|Pending Status| D1
+    API_Gateway -->|Pre-flight Check| CostGuard
     API_Gateway -->|Task Payload| Task_Queue
     
     Task_Queue -->|Trigger| Scraper
-    Task_Queue -->|Trigger| SocialEngine
+    Task_Queue -->|Trigger| DataPipelines
+    Task_Queue -->|Trigger| TrafficEngine
     Task_Queue -->|Trigger| IPEngine
     
     Scraper -->|Market Data| Consensus
-    SocialEngine -->|Sentiment Data| Consensus
-    IPEngine -->|Moat Data| Consensus
+    Consensus <-->|Fix Malformed JSON| SelfHeal
     
     Consensus -->|Final Report| D1
-    Consensus -->|Text Chunks| RAG
-    RAG -->|Embeddings| D2
+    Consensus -->|Embeddings| D2
+    Consensus -->|Deduplication & Insights| D3
+    Temporal -->|Drift Alerts| D1
     
     Founder -->|Chat Query| RAG
     D2 -->|Context Docs| RAG
     RAG -->|Answers| Founder
 
-    Founder -->|Invite Email| Roles
-    Roles -->|Member Update| D3
-    Collaborator -->|Access Request| Roles
-    D3 -->|Permissions| Roles
-
-    style Auth fill:#3B82F6,stroke:#2563EB,stroke-width:2px,color:#fff
     style Orchestration fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#fff
     style Intelligence fill:#10B981,stroke:#059669,stroke-width:2px,color:#fff
     style Analysis fill:#8B5CF6,stroke:#7C3AED,stroke-width:2px,color:#fff
@@ -215,30 +205,40 @@ sequenceDiagram
     participant MQ as RabbitMQ
     participant W as Celery Worker
     participant R as Redis Pub/Sub
-    participant AI as LLM (Gemini)
+    participant AI as Gemini / Groq
 
     C->>API: POST /api/v1/validate (Idea)
     API->>DB: Insert validation (Status: pending)
-    DB-->>API: validation_id
     API->>MQ: send_task('process_validation')
-    API-->>C: 202 Accepted (validation_id)
+    API-->>C: 202 Accepted
     
     C->>API: WS Connect (/ws/validation/{id})
     API->>R: Subscribe to channel
     
     MQ-->>W: Consume task
-    W->>R: Publish Event (Status: gathering_data)
-    R-->>API: Receive Event
-    API-->>C: WS Push (gathering_data)
+    W->>R: Lock & Deduplicate Check
     
-    W->>W: Scrape Competitors (Firecrawl)
-    W->>AI: Generate Consensus & Report
-    AI-->>W: Structured JSON output
+    W->>W: Firecrawl Scrape & RAG Embed
+    W->>AI: Generate Report (Gemini + Groq)
+    AI-->>W: Structured JSON output (with self-healing)
+    
+    W->>R: Publish Event (Consensus section ready)
+    R-->>API: Receive Event
+    API-->>C: WS Push (Partial Consensus UI Render)
+    
+    par Parallel Data Pipelines
+        W->>W: Run Pricing Pipeline
+        W->>R: Publish Event (Pricing ready)
+        R-->>API: WS Push
+        W->>W: Run Patent Pipeline
+        W->>R: Publish Event (Patents ready)
+        R-->>API: WS Push
+    end
     
     W->>DB: Update row (Status: completed, JSON payload)
-    W->>R: Publish Event (Status: completed)
+    W->>R: Publish Event (Final completed state)
     R-->>API: Receive Event
-    API-->>C: WS Push (completed, final_report)
+    API-->>C: WS Push (Pipeline fully completed)
 ```
 
 ### Entity Relationship (Class) Diagram
@@ -250,7 +250,7 @@ erDiagram
     WORKSPACES ||--o{ WORKSPACE_MEMBERS : contains
     VALIDATIONS ||--o{ RAG_CHUNKS : generates
     VALIDATIONS ||--o{ PRICING_INTELLIGENCE : has
-    VALIDATIONS ||--o{ SOCIAL_SENTIMENT : has
+    VALIDATIONS ||--o{ WEB_TRAFFIC : has
     VALIDATIONS ||--o{ FUNDING_INTELLIGENCE : has
     
     POSTS ||--o{ COMMENTS : has
@@ -272,6 +272,7 @@ erDiagram
         validation_status status
         jsonb report_json
         float consensus_confidence
+        vector idea_embedding
         timestamp created_at
     }
 
@@ -314,7 +315,7 @@ erDiagram
 |--------|----------|-------------|
 | `POST` | `/api/v1/validate` | Submits a new idea for background AI processing. |
 | `GET`  | `/api/v1/validate/{id}` | Fetches the completed validation report (Cache-Aside). |
-| `WS`   | `/ws/validation/{id}` | Real-time WebSocket stream for processing milestones. |
+| `WS`   | `/ws/validation/{id}` | Real-time progressive WebSocket stream for pipeline milestones. |
 | `POST` | `/api/v1/validate/{id}/summarize` | Generates an AI summary of a completed report. |
 
 ### RAG & AI Chat
@@ -342,10 +343,11 @@ erDiagram
 
 ### Backend
 - **Framework:** FastAPI (Python 3.10+)
-- **Task Queue:** Celery + RabbitMQ
+- **Task Queue:** Celery + RabbitMQ (with Dead Letter Queues)
 - **Cache & Pub/Sub:** Redis
 - **Database:** Supabase (PostgreSQL) + pgvector
-- **AI/LLMs:** Google Gemini (2.0-flash), Groq (Llama 3), SentenceTransformers
+- **AI/LLMs:** Google Gemini (1.5-Pro / 2.5-Flash), Groq (Llama 3.1 70B), Gemini `text-embedding-004`
+- **Resilience:** Tenacity (for self-healing AI outputs)
 - **Web Scraping:** Firecrawl
 
 ---
@@ -380,8 +382,9 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 
 # In a separate terminal, run the Celery Worker
-celery -A app.main.celery_app worker --loglevel=info
+celery -A app.worker.celery_tasks worker --loglevel=info
 ```
+*(Alternatively, use `./startup.sh` if running on Unix to boot everything at once).*
 
 ### 4. Frontend Setup
 ```bash
