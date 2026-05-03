@@ -33,4 +33,4 @@ async def validation_websocket(websocket: WebSocket, validation_id: str) -> None
         print(f"Unexpected WebSocket error for {validation_id}: {e}")
     finally:
         # Always clean up, regardless of how the loop exits.
-        manager.disconnect(validation_id)
+        manager.disconnect(validation_id, websocket)

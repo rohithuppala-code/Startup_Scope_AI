@@ -15,14 +15,15 @@
 
 services:
   redis:
-    image: redis:7-alpine
+    image: redis/redis-stack-server:latest
     container_name: startupscope_redis
     # BUG FIX: Added restart policy. Without it a crashed Redis stays dead until
     # someone manually restarts the container, violating "Fail-safe by design".
     restart: unless-stopped
     ports:
       - "6380:6379"   # Host 6380 → container 6379 (avoids clashing with local Redis)
-    command: redis-server --appendonly yes
+    environment:
+      - REDIS_ARGS=--appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:

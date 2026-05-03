@@ -39,13 +39,13 @@ class ConnectionManager:
         async with self.lock:
             self.active_connections[validation_id] = websocket
 
-    def disconnect(self, validation_id: str) -> None:
+    def disconnect(self, validation_id: str, websocket: WebSocket) -> None:
         """
         Removes a WebSocket connection from the active registry.
-        Safe to call even if the validation_id is not registered.
-        Intentionally synchronous — called from both sync and async contexts.
+        Only removes if the current active connection matches the disconnecting one.
         """
-        self.active_connections.pop(validation_id, None)
+        if self.active_connections.get(validation_id) == websocket:
+            self.active_connections.pop(validation_id, None)
 
     async def send_update(self, validation_id: str, message: dict) -> None:
         """
