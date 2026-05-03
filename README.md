@@ -55,27 +55,27 @@ The system is split into a **Next.js Frontend** and a **FastAPI + Celery Backend
 ```mermaid
 flowchart TB
     subgraph ClientLayer["🖥️ Frontend (Next.js + Tailwind)"]
-        UI[React Components]
-        Store[Zustand Stores]
-        WS[WebSocket Client]
+        UI["React Components"]
+        Store["Zustand Stores"]
+        WS["WebSocket Client"]
     end
 
     subgraph BackendLayer["⚙️ Backend (FastAPI + Celery)"]
-        API[FastAPI Endpoints]
-        WS_Manager[WebSocket Manager]
-        Worker[Celery Worker Nodes]
-        AI[AI Pipeline (Gemini + Groq)]
+        API["FastAPI Endpoints"]
+        WS_Manager["WebSocket Manager"]
+        Worker["Celery Worker Nodes"]
+        AI["AI Pipeline (Gemini + Groq)"]
     end
 
     subgraph InfraLayer["☁️ Infrastructure & State"]
-        MQ[(RabbitMQ + DLQ)]
-        Cache[(Redis: Cache, Locks, Pub/Sub)]
-        DB[(Supabase PostgreSQL + pgvector)]
+        MQ[("RabbitMQ + DLQ")]
+        Cache[("Redis: Cache, Locks, Pub/Sub")]
+        DB[("Supabase PostgreSQL + pgvector")]
     end
 
     subgraph ExternalLayer["🌐 External APIs"]
-        Firecrawl[Firecrawl API]
-        Traffic[Traffic APIs]
+        Firecrawl["Firecrawl API"]
+        Traffic["Traffic APIs"]
         Patents["USPTO / EPO"]
         Webhooks["Outbound Webhooks"]
     end
@@ -199,13 +199,13 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    participant C as Client (Next.js)
+    participant C as Client
     participant API as FastAPI
     participant DB as Supabase
     participant MQ as RabbitMQ
     participant W as Celery Worker
-    participant R as Redis Pub/Sub
-    participant AI as Gemini / Groq
+    participant R as Redis PubSub
+    participant AI as Gemini and Groq
 
     C->>API: POST /api/v1/validate (Idea)
     API->>DB: Insert validation (Status: pending)

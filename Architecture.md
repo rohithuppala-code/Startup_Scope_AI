@@ -38,28 +38,28 @@ The system implements a highly resilient, event-driven architecture:
 ```mermaid
 flowchart TB
     subgraph ClientLayer ["🖥️ Client"]
-        UI[Next.js App]
+        UI["Next.js App"]
     end
 
     subgraph APILayer ["🌐 FastAPI Gateway"]
-        API[REST /validate]
-        WS[WebSocket /ws]
-        CG[Cost Guard]
+        API["REST /validate"]
+        WS["WebSocket /ws"]
+        CG["Cost Guard"]
     end
 
     subgraph AsyncOrchestration ["⚙️ Celery & Message Brokers"]
-        MQ[(RabbitMQ + DLQ)]
-        Cache[(Redis Cache & Locks)]
-        PubSub((Redis Pub/Sub))
-        Worker[Celery Worker Nodes]
+        MQ[("RabbitMQ + DLQ")]
+        Cache[("Redis Cache & Locks")]
+        PubSub(("Redis Pub/Sub"))
+        Worker["Celery Worker Nodes"]
     end
 
     subgraph IntelligencePipelines ["🧠 Intelligence Layer"]
-        Firecrawl[Advanced Firecrawl Pipeline]
-        Data[Traffic, Patents, Pricing, Jobs]
-        AI[Gemini + Groq Consensus]
-        Mem[Redis Semantic Memory]
-        RAG[pgvector RAG Embeddings]
+        Firecrawl["Advanced Firecrawl Pipeline"]
+        Data["Traffic, Patents, Pricing, Jobs"]
+        AI["Gemini + Groq Consensus"]
+        Mem["Redis Semantic Memory"]
+        RAG["pgvector RAG Embeddings"]
     end
 
     UI -->|1. Submit Idea| API
@@ -114,19 +114,19 @@ startupscope-ai/
 
 ```mermaid
 graph TD
-    MAIN[main.py] --> ROUTER[API/WS Routers]
-    MAIN --> CELERY[Celery Task Dispatch]
-    ROUTER --> WS_MGR[WebSocket Manager]
-    WS_MGR --> LISTENER[Redis Pub/Sub Listener]
+    MAIN["main.py"] --> ROUTER["API/WS Routers"]
+    MAIN --> CELERY["Celery Task Dispatch"]
+    ROUTER --> WS_MGR["WebSocket Manager"]
+    WS_MGR --> LISTENER["Redis Pub/Sub Listener"]
     
-    CELERY --> ORCHESTRATOR[celery_tasks.py]
+    CELERY --> ORCHESTRATOR["celery_tasks.py"]
     
-    ORCHESTRATOR --> FC[firecrawl_pipeline.py]
-    ORCHESTRATOR --> AI[ai_pipeline.py]
-    ORCHESTRATOR --> CONSENSUS[consensus.py]
-    ORCHESTRATOR --> DATA[pricing, traffic, patents, jobs]
-    ORCHESTRATOR --> RAG[rag.py]
-    ORCHESTRATOR --> MEM[redis_memory.py]
+    ORCHESTRATOR --> FC["firecrawl_pipeline.py"]
+    ORCHESTRATOR --> AI["ai_pipeline.py"]
+    ORCHESTRATOR --> CONSENSUS["consensus.py"]
+    ORCHESTRATOR --> DATA["pricing, traffic, patents, jobs"]
+    ORCHESTRATOR --> RAG["rag.py"]
+    ORCHESTRATOR --> MEM["redis_memory.py"]
 
     style MAIN fill:#4a9eff,color:#fff
     style ORCHESTRATOR fill:#e67e22,color:#fff
