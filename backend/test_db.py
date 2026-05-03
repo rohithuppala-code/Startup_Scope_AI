@@ -3,5 +3,9 @@ from supabase import create_client
 from app.core.config import settings
 
 supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-resp = supabase.table("validations").select("id, status, error_message, updated_at").eq("id", "9b8d835d-a385-4736-85cb-b3572777f418").execute()
-print(resp.data)
+# get the channel id for the last file message
+resp = supabase.table("messages").select("channel_id").ilike("content", "[FILE]%").order("created_at", desc=True).limit(1).execute()
+if resp.data:
+    channel_id = resp.data[0]['channel_id']
+    count_resp = supabase.table("messages").select("id", count="exact").eq("channel_id", channel_id).execute()
+    print(f"Total messages in channel {channel_id}: {count_resp.count}")
