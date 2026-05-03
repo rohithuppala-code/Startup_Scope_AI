@@ -34,9 +34,10 @@ from urllib.parse import urlparse
 
 import requests
 
-from app.services.ai_pipeline import _get_gemini
+from app.services.ai_pipeline import _get_groq
+from app.core.logging_utils import clean_error
 from app.schemas.ai_reports import CompetitorTraffic, TrafficReport
-from google.genai import types as genai_types
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 # =====================================================================
@@ -220,7 +221,8 @@ def _synthesize_traffic(
     if not all_traffic:
         return "No traffic data available for analysis."
 
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     summary_parts = []
     for ct in all_traffic:
@@ -231,30 +233,27 @@ def _synthesize_traffic(
         )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=(
-                f"Startup Idea: {idea_description}\n\n"
-                f"Competitor Traffic Data (from Wayback Machine crawl frequency):\n"
-                + "\n".join(summary_parts)
-            ),
-            config=genai_types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a web traffic analyst. Using Wayback Machine crawl frequency "
-                    "as a traffic proxy, analyze the competitive landscape:\n"
-                    "1. Which competitors have the highest web presence?\n"
-                    "2. Growth trends — who is gaining/losing momentum?\n"
-                    "3. Market maturity — how established is this space?\n"
-                    "4. Opportunity assessment for a new entrant.\n\n"
-                    "Note: Crawl frequency is a proxy, not exact traffic numbers."
-                ),
-                temperature=0.5,
-            ),
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1.5, min=2, max=10),
+            reraise=True
         )
-        return response.text or "Traffic analysis generation failed."
+        def _do_synthesize():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a web traffic analyst. Using Wayback Machine crawl frequency as a traffic proxy, analyze the competitive landscape:\n1. Which competitors have the highest web presence?\n2. Growth trends — who is gaining/losing momentum?\n3. Market maturity — how established is this space?\n4. Opportunity assessment for a new entrant.\n\nNote: Crawl frequency is a proxy, not exact traffic numbers."},
+                    {"role": "user", "content": f"Startup Idea: {idea_description}\n\nCompetitor Traffic Data (from Wayback Machine crawl frequency):\n" + "\n".join(summary_parts)},
+                ],
+                temperature=0.5,
+            )
+            
+        response = _do_synthesize()
+        raw = response.choices[0].message.content
+        return raw or "Traffic analysis generation failed."
     except Exception as e:
-        print(f"[Traffic] Synthesis failed: {e}", flush=True)
-        return f"Traffic analysis unavailable: {e}"
+        print(f"[Traffic] Synthesis failed: {clean_error(e)}", flush=True)
+        return "Traffic analysis unavailable due to AI provider quota limits. We are automatically retrying or falling back to cached data. Please try again in a few minutes."
 
 
 # =====================================================================

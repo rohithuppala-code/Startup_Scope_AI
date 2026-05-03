@@ -22,7 +22,6 @@ interface Stage {
 const PIPELINE_STAGES: Omit<Stage, "status">[] = [
   { id: "firecrawl", label: "Firecrawling competitors...", icon: <Globe className="w-4 h-4" /> },
   { id: "pricing", label: "Analyzing pricing data...", icon: <DollarSign className="w-4 h-4" /> },
-  { id: "sentiment", label: "Scanning market sentiment...", icon: <BarChart3 className="w-4 h-4" /> },
   { id: "gemini", label: "Running Gemini Consensus...", icon: <Brain className="w-4 h-4" /> },
   { id: "synthesis", label: "Synthesizing final report...", icon: <Sparkles className="w-4 h-4" /> },
 ];

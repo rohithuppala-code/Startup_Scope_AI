@@ -13,6 +13,19 @@ export async function api<T = unknown>(
     "Content-Type": "application/json",
     ...(extraHeaders as Record<string, string>),
   };
+  
+  if (typeof window !== "undefined") {
+    try {
+      const stateStr = localStorage.getItem("startupscope-user");
+      if (stateStr) {
+        const state = JSON.parse(stateStr);
+        if (state?.state?.accessToken) {
+          headers["Authorization"] = `Bearer ${state.state.accessToken}`;
+        }
+      }
+    } catch (e) {}
+  }
+  
   if (userId) headers["x-user-id"] = userId;
 
   const res = await fetch(`${BASE}${path}`, {

@@ -27,9 +27,11 @@ import json
 from typing import Any, Dict, List
 from urllib.parse import quote_plus
 
-from app.services.ai_pipeline import _get_firecrawl, _get_gemini
+from app.services.ai_pipeline import _get_firecrawl, _get_groq
+from app.core.logging_utils import clean_error
 from app.schemas.ai_reports import CompetitorJobs, JobDepartment, JobsReport
 from google.genai import types as genai_types
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 # =====================================================================
@@ -161,7 +163,8 @@ def _extract_job_data(
     """
     Extracts structured job data from scraped content via Gemini.
     """
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     current_prompt = (
         f"Company: {competitor_name}\n\n"
@@ -170,17 +173,24 @@ def _extract_job_data(
 
     for attempt in range(2):
         try:
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=current_prompt,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=_JOB_EXTRACTION_PROMPT,
-                    response_mime_type="application/json",
-                    temperature=0.2,
-                ),
+            @retry(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1.5, min=2, max=10),
+                reraise=True
             )
-
-            raw = response.text
+            def _do_extract():
+                return client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": _JOB_EXTRACTION_PROMPT},
+                        {"role": "user", "content": current_prompt},
+                    ],
+                    temperature=0.2,
+                    response_format={"type": "json_object"},
+                )
+            
+            response = _do_extract()
+            raw = response.choices[0].message.content
             data = json.loads(raw)
 
             departments = []
@@ -204,13 +214,13 @@ def _extract_job_data(
 
         except Exception as e:
             if attempt == 0:
-                print(f"[Jobs] Self-heal attempt for {competitor_name}: {e}", flush=True)
+                print(f"[Jobs] Self-heal attempt for {competitor_name}: {clean_error(e)}", flush=True)
                 current_prompt = (
                     f"Previous extraction failed: {str(e)[:200]}\n\n"
                     f"Re-extract job data for {competitor_name}:\n{content[:3000]}"
                 )
                 continue
-            print(f"[Jobs] Extraction failed for {competitor_name}: {e}", flush=True)
+            print(f"[Jobs] Extraction failed for {competitor_name}: {clean_error(e)}", flush=True)
             return CompetitorJobs(competitor_name=competitor_name)
 
     return CompetitorJobs(competitor_name=competitor_name)
@@ -228,7 +238,8 @@ def _synthesize_hiring_landscape(
     if not all_jobs:
         return "No job posting data available for analysis."
 
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     summary_parts = []
     for cj in all_jobs:
@@ -241,28 +252,27 @@ def _synthesize_hiring_landscape(
         )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=(
-                f"Startup Idea: {idea_description}\n\n"
-                f"Competitor Hiring Data:\n" + "\n".join(summary_parts)
-            ),
-            config=genai_types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a competitive intelligence analyst. Analyze the hiring "
-                    "data and provide a markdown report on:\n"
-                    "1. Which competitors are scaling fastest (headcount velocity)\n"
-                    "2. Which departments are getting the most investment\n"
-                    "3. What this signals about market direction\n"
-                    "4. Talent competition risks for a new entrant"
-                ),
-                temperature=0.5,
-            ),
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1.5, min=2, max=10),
+            reraise=True
         )
-        return response.text or "Hiring analysis generation failed."
+        def _do_synthesize():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a competitive intelligence analyst. Analyze the hiring data and provide a markdown report on:\n1. Which competitors are scaling fastest (headcount velocity)\n2. Which departments are getting the most investment\n3. What this signals about market direction\n4. Talent competition risks for a new entrant"},
+                    {"role": "user", "content": f"Startup Idea: {idea_description}\n\nCompetitor Hiring Data:\n" + "\n".join(summary_parts)},
+                ],
+                temperature=0.5,
+            )
+        
+        response = _do_synthesize()
+        raw = response.choices[0].message.content
+        return raw or "Hiring analysis generation failed."
     except Exception as e:
-        print(f"[Jobs] Synthesis failed: {e}", flush=True)
-        return f"Hiring landscape analysis unavailable: {e}"
+        print(f"[Jobs] Synthesis failed: {clean_error(e)}", flush=True)
+        return "Hiring landscape analysis unavailable due to AI provider quota limits. We are automatically retrying or falling back to cached data. Please try again in a few minutes."
 
 
 # =====================================================================

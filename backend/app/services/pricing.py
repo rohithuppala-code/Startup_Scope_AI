@@ -20,9 +20,10 @@ from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 from app.core.config import settings
-from app.services.ai_pipeline import _get_firecrawl, _get_gemini, SelfHealParseError
+from app.services.ai_pipeline import _get_firecrawl, _get_groq, SelfHealParseError
 from app.schemas.ai_reports import CompetitorPricing, PricingTier, PricingIntelligenceReport
-from google.genai import types as genai_types
+from app.core.logging_utils import clean_error
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 # =====================================================================
@@ -76,10 +77,10 @@ def scrape_pricing_pages(competitor_urls: List[str]) -> List[Dict[str, Any]]:
         try:
             print(f"[Pricing] Crawling: {pricing_url}", flush=True)
 
-            # Use Firecrawl's scrape_url to get the pricing page content
-            response = firecrawl.scrape_url(
+            # Use Firecrawl's scrape to get the pricing page content
+            response = firecrawl.scrape(
                 url=pricing_url,
-                params={"formats": ["markdown"]},
+                formats=["markdown"],
             )
 
             # Extract markdown content from the response
@@ -153,7 +154,8 @@ def extract_pricing(
     Returns:
         CompetitorPricing with extracted tiers.
     """
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     user_prompt = (
         f"Competitor: {competitor_name}\n"
@@ -165,17 +167,25 @@ def extract_pricing(
     current_prompt = user_prompt
     for attempt in range(3):
         try:
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=current_prompt,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=_PRICING_EXTRACTION_PROMPT,
-                    response_mime_type="application/json",
-                    temperature=0.3,  # Low temp for extraction accuracy
-                ),
+            @retry(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1.5, min=2, max=10),
+                reraise=True
             )
+            def _do_extract():
+                return client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": _PRICING_EXTRACTION_PROMPT},
+                        {"role": "user", "content": current_prompt},
+                    ],
+                    temperature=0.3,
+                    response_format={"type": "json_object"},
+                )
+            
+            response = _do_extract()
 
-            raw = response.text
+            raw = response.choices[0].message.content
             data = json.loads(raw)
 
             # Parse individual tiers
@@ -203,7 +213,7 @@ def extract_pricing(
                 )
                 continue
             else:
-                print(f"[Pricing] Extraction failed for {competitor_name} after 3 attempts: {e}", flush=True)
+                print(f"[Pricing] Extraction failed for {competitor_name} after 3 attempts: {clean_error(e)}", flush=True)
                 return CompetitorPricing(
                     competitor_name=competitor_name,
                     competitor_url=competitor_url,
@@ -234,7 +244,8 @@ def analyze_pricing_gaps(all_pricing: List[CompetitorPricing]) -> str:
     if not all_pricing:
         return "No pricing data available for gap analysis."
 
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     # Build a structured summary of all pricing data
     pricing_summary = []
@@ -262,18 +273,27 @@ def analyze_pricing_gaps(all_pricing: List[CompetitorPricing]) -> str:
     )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=f"Competitor Pricing Data:\n\n" + "\n\n".join(pricing_summary),
-            config=genai_types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.5,
-            ),
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1.5, min=2, max=10),
+            reraise=True
         )
-        return response.text or "Gap analysis generation failed."
+        def _do_analyze():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Competitor Pricing Data:\n\n" + "\n\n".join(pricing_summary)},
+                ],
+                temperature=0.5,
+            )
+            
+        response = _do_analyze()
+        raw = response.choices[0].message.content
+        return raw or "Gap analysis generation failed."
     except Exception as e:
-        print(f"[Pricing] Gap analysis failed: {e}", flush=True)
-        return f"Gap analysis unavailable: {e}"
+        print(f"[Pricing] Gap analysis failed: {clean_error(e)}", flush=True)
+        return "Gap analysis unavailable due to AI provider quota limits. We are automatically retrying or falling back to cached data. Please try again in a few minutes."
 
 
 # =====================================================================
@@ -351,4 +371,4 @@ def _store_pricing_data(
                 "gap_analysis": gap_analysis,
             }).execute()
         except Exception as e:
-            print(f"[Pricing] Failed to store data for {cp.competitor_name}: {e}", flush=True)
+            print(f"[Pricing] Failed to store data for {cp.competitor_name}: {clean_error(e)}", flush=True)

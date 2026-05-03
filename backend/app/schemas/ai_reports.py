@@ -167,45 +167,6 @@ class FundingIntelligenceReport(BaseModel):
 
 
 # =====================================================================
-# SOCIAL SENTIMENT SCHEMA (Feature 7)
-# =====================================================================
-
-class SentimentPost(BaseModel):
-    """A single social media post with classified sentiment."""
-    title: str = Field(default="")
-    url: str = Field(default="")
-    subreddit: str = Field(default="")
-    sentiment: str = Field(
-        default="neutral",
-        description="'positive', 'negative', or 'neutral'.",
-    )
-    score: int = Field(default=0, description="Reddit upvote score.")
-
-
-class SentimentResult(BaseModel):
-    """Aggregated sentiment for a single competitor or the idea itself."""
-    query: str = Field(description="The search query used.")
-    platform: str = Field(default="reddit")
-    positive_count: int = Field(default=0)
-    negative_count: int = Field(default=0)
-    neutral_count: int = Field(default=0)
-    market_buzz_score: float = Field(
-        default=0.5,
-        ge=0.0,
-        le=1.0,
-        description="0.0 = extremely negative, 0.5 = neutral, 1.0 = extremely positive.",
-    )
-    sample_posts: List[SentimentPost] = Field(default_factory=list)
-
-
-class SentimentReport(BaseModel):
-    """Aggregated sentiment across all queries."""
-    results: List[SentimentResult] = Field(default_factory=list)
-    overall_buzz_score: float = Field(default=0.5)
-    summary: str = Field(default="Sentiment analysis not yet available.")
-
-
-# =====================================================================
 # TEMPORAL TRACKING SCHEMA (Feature 4)
 # =====================================================================
 
@@ -359,7 +320,6 @@ class EnrichedValidationResult(BaseModel):
     consensus: Optional[ConsensusReport] = None
     pricing: Optional[PricingIntelligenceReport] = None
     funding: Optional[FundingIntelligenceReport] = None
-    sentiment: Optional[SentimentReport] = None
     patents: Optional[PatentReport] = None
     jobs: Optional[JobsReport] = None
     traffic: Optional[TrafficReport] = None

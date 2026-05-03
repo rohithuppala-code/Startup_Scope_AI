@@ -70,17 +70,63 @@ export function useWebSocket(): UseWebSocketReturn {
   const [sections, setSections] = useState<WSSection[]>([]);
   const [rawReport, setRawReport] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState<UseWebSocketReturn["status"]>("idle");
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const validationIdRef = useRef<string | null>(null);
-  const attemptRef = useRef(0);
 
   const disconnect = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (fallbackIntervalRef.current) {
+      clearInterval(fallbackIntervalRef.current);
+      fallbackIntervalRef.current = null;
     }
     validationIdRef.current = null;
   }, []);
+
+  const startFallbackPolling = useCallback((vid: string) => {
+    if (fallbackIntervalRef.current) return;
+    
+    let attempt = 0;
+    fallbackIntervalRef.current = setInterval(async () => {
+      attempt += 1;
+      if (attempt > 150) {
+        setStatus("failed");
+        disconnect();
+        return;
+      }
+
+      try {
+        const userId = useUserStore.getState().userId;
+        const accessToken = useUserStore.getState().accessToken;
+        const headers: Record<string, string> = {};
+        if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+        else if (userId) headers["x-user-id"] = userId;
+        
+        const res = await fetch(`${API_BASE}/api/v1/validate/${vid}/status`).catch(
+          () => fetch(`${API_BASE}/api/v1/validate/${vid}`, { headers })
+        );
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data.status === "completed") {
+          setStatus("completed");
+          if (data.report_json) {
+            setRawReport(data.report_json);
+            setSections(flattenReportJson(data.report_json));
+          }
+          disconnect();
+        } else if (data.status === "failed") {
+          setStatus("failed");
+          disconnect();
+        } else {
+          setStatus("streaming");
+        }
+      } catch (err) {}
+    }, 2000);
+  }, [disconnect]);
 
   const connect = useCallback(
     (validationId: string) => {
@@ -89,63 +135,72 @@ export function useWebSocket(): UseWebSocketReturn {
       setRawReport(null);
       setStatus("connecting");
       validationIdRef.current = validationId;
-      attemptRef.current = 0;
 
-      // Poll the public status endpoint every 2s.
-      // Falls back to the authed endpoint if status endpoint is unavailable.
-      intervalRef.current = setInterval(async () => {
-        const vid = validationIdRef.current;
-        if (!vid) return;
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsHost = API_BASE.replace(/^https?:\/\//, "");
+      const wsUrl = `${wsProtocol}//${wsHost}/ws/validation/${validationId}`;
 
-        attemptRef.current += 1;
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-        // Timeout after 5 minutes (150 × 2s)
-        if (attemptRef.current > 150) {
-          setStatus("failed");
-          disconnect();
-          return;
-        }
+        ws.onopen = () => {
+          setStatus("streaming");
+        };
 
-        try {
-          // Use the public /status endpoint (no auth needed)
-          const userId = useUserStore.getState().userId;
-          const fallbackHeaders: Record<string, string> = {};
-          if (userId) fallbackHeaders["x-user-id"] = userId;
-          const res = await fetch(`${API_BASE}/api/v1/validate/${vid}/status`).catch(
-            () => fetch(`${API_BASE}/api/v1/validate/${vid}`, { headers: fallbackHeaders })
-          );
-          if (!res.ok) return; // keep polling on transient errors
-
-          const data = (await res.json()) as {
-            status: string;
-            report_json?: Record<string, unknown>;
-          };
-
-          if (data.status === "completed") {
-            setStatus("completed");
-            if (data.report_json && typeof data.report_json === "object") {
-              // Expose both: (1) raw object for LiveIdeaCard feasibility/tabs
-              //              (2) flattened sections for StudioPage report rendering
-              setRawReport(data.report_json);
-              setSections(flattenReportJson(data.report_json));
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            if (data.status === "failed") {
+              setStatus("failed");
+              disconnect();
+              return;
             }
-            disconnect();
-          } else if (data.status === "failed") {
-            setStatus("failed");
-            disconnect();
-          } else {
-            // pending / processing → show streaming spinner
-            setStatus("streaming");
+
+            if (data.status === "completed") {
+              setStatus("completed");
+              if (data.report_json) {
+                setRawReport(data.report_json);
+                setSections(flattenReportJson(data.report_json));
+              }
+              disconnect();
+              return;
+            }
+
+            if (data.section && data.data) {
+              setSections((prev) => {
+                const exists = prev.findIndex((s) => s.section === data.section);
+                if (exists >= 0) {
+                  const updated = [...prev];
+                  updated[exists] = { section: data.section, data: data.data };
+                  return updated;
+                }
+                return [...prev, { section: data.section, data: data.data }];
+              });
+            }
+          } catch (e) {
+            console.error("Failed to parse WS message", e);
           }
-        } catch {
-          // Network blip — keep polling silently
-        }
-      }, 2000);
+        };
+
+        ws.onerror = () => {
+          console.warn("WebSocket error, falling back to polling");
+          startFallbackPolling(validationId);
+        };
+
+        ws.onclose = () => {
+          if (status !== "completed" && status !== "failed") {
+            startFallbackPolling(validationId);
+          }
+        };
+      } catch (err) {
+        startFallbackPolling(validationId);
+      }
     },
-    [disconnect]
+    [disconnect, startFallbackPolling, status]
   );
 
-  // Cleanup on unmount
   useEffect(() => () => disconnect(), [disconnect]);
 
   return { sections, rawReport, status, connect, disconnect };

@@ -432,7 +432,7 @@ def upload_and_sign(
             file=pdf_bytes,
             file_options={
                 "content-type": "application/pdf",
-                "upsert": True,  # BUG FIX: Must be boolean, not string "true"
+                "upsert": "true",  # BUG FIX: Supabase headers must be string
             },
         )
         print(f"[Export] Uploaded to exports/{file_path}.", flush=True)

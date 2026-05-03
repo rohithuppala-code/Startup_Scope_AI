@@ -168,7 +168,7 @@ export default function ArenaFeedPage() {
             <textarea
               value={composerText}
               onChange={(e) => setComposerText(e.target.value)}
-              placeholder="Describe your startup idea in detail. Our AI will analyze competitors, pricing, market sentiment, and more..."
+              placeholder="Describe your startup idea in detail. Our AI will analyze competitors, pricing, patents, and more..."
               rows={4}
               className="w-full bg-transparent text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-muted)] outline-none resize-none leading-relaxed"
               autoFocus

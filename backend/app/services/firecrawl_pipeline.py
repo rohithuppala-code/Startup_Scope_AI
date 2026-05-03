@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 # Strict timeouts (seconds)
 LLM_TIMEOUT = 15
-SEARCH_TIMEOUT = 20
-SCRAPE_TIMEOUT = 25
+SEARCH_TIMEOUT = 600  # Increased from 20s to 10 minutes per user request
+SCRAPE_TIMEOUT = 600  # Increased from 25s to 10 minutes per user request
 
 # Chunk size for markdown splitting (tokens ≈ chars/4, ~1000 tokens per chunk)
 MARKDOWN_CHUNK_CHARS = 4000
@@ -116,6 +116,16 @@ def _get_gemini(task: str = "default"):
         
         _gemini_clients[task] = genai.Client(api_key=key)
     return _gemini_clients[task]
+
+
+_groq_client = None
+
+def _get_groq():
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+        _groq_client = Groq(api_key=settings.GROQ_API_KEY)
+    return _groq_client
 
 
 def _get_redis():
@@ -212,10 +222,9 @@ def _domain_score(url: str) -> float:
 # =====================================================================
 
 def generate_search_queries(idea_description: str, target_market: str = "") -> List[str]:
-    """Uses Gemini to generate 3-5 high-intent search queries. Circuit-breaker protected."""
+    """Uses Groq to generate 3-5 high-intent search queries. Circuit-breaker protected."""
     def _call():
-        client = _get_gemini(task="reranking")
-        from google.genai import types as genai_types
+        client = _get_groq()
 
         prompt = (
             "You are a market research expert. Generate exactly 5 search queries to find "
@@ -228,21 +237,20 @@ def generate_search_queries(idea_description: str, target_market: str = "") -> L
             "- Query 3: Pricing intelligence (e.g., '[competitor type] pricing comparison')\n"
             "- Query 4: User pain points (e.g., '[problem] solutions reviews')\n"
             "- Query 5: Industry trends (e.g., '[industry] trends funding 2025')\n\n"
-            "Output ONLY a JSON array of 5 strings. No explanation."
+            "Output ONLY JSON matching: {\"queries\": [\"...\", ...]}"
         )
 
         _track("llm_calls")
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                temperature=0.3,
-                max_output_tokens=256,
-                response_mime_type="application/json",
-            ),
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=256,
+            response_format={"type": "json_object"}
         )
 
-        queries = json.loads(response.text)
+        parsed = json.loads(response.choices[0].message.content)
+        queries = parsed.get("queries", [])
         if isinstance(queries, list) and len(queries) >= 3:
             return queries[:5]
         return None
@@ -353,7 +361,7 @@ def search_with_markdown(queries: List[str], limit_per_query: int = 3) -> List[D
                         logger.warning("[Firecrawl] Search query failed: %s", e)
             except FutureTimeout:
                 logger.warning(
-                    "[Firecrawl] Search timeout (%ds). Using partial results.", SEARCH_TIMEOUT
+                    "[Firecrawl] Search timeout (%ds) reached. Using partial results.", SEARCH_TIMEOUT
                 )
 
     logger.info("[Firecrawl] Search phase complete: %d unique results.", len(all_results))
@@ -389,8 +397,7 @@ def rerank_results(
 
     # Step 2: LLM refinement on reduced candidate set
     try:
-        client = _get_gemini(task="reranking")
-        from google.genai import types as genai_types
+        client = _get_groq()
 
         summaries = []
         for i, r in enumerate(candidates):
@@ -407,23 +414,22 @@ def rerank_results(
             f"Score each result 0-10 for relevance as a DIRECT competitor or market data source.\n"
             f"Penalize: blogs, news articles, generic listicles.\n"
             f"Reward: product pages, pricing pages, feature comparisons, market reports.\n\n"
-            f"Output ONLY a JSON array of objects: [{{\"index\": 0, \"score\": 8}}, ...]\n"
+            f"Output JSON format: {{\"scores\": [{{\"index\": 0, \"score\": 8}}, ...]}}\n"
             f"Include ALL {len(summaries)} results."
         )
 
         _track("llm_calls")
         with _Timer("rerank_llm"):
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=512,
-                    response_mime_type="application/json",
-                ),
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=512,
+                response_format={"type": "json_object"}
             )
 
-        scores = json.loads(response.text)
+        parsed = json.loads(response.choices[0].message.content)
+        scores = parsed.get("scores", [])
         if isinstance(scores, list):
             scored = []
             for entry in scores:
@@ -512,7 +518,7 @@ def targeted_scrape(urls: List[str], max_pages: int = 3) -> List[Dict[str, Any]]
                         _track("errors")
                         logger.warning("[Firecrawl] Scrape failed: %s", e)
             except FutureTimeout:
-                logger.warning("[Firecrawl] Scrape timeout (%ds). Using partial.", SCRAPE_TIMEOUT)
+                logger.warning("[Firecrawl] Scrape timeout (%ds) reached. Using partial.", SCRAPE_TIMEOUT)
 
     logger.info("[Firecrawl] Deep scrape complete: %d pages.", len(scraped))
     return scraped
@@ -552,8 +558,7 @@ def extract_competitor_features(
 ) -> Dict[str, Any]:
     """Extracts structured competitor features. FIX #8: chunked markdown."""
     try:
-        client = _get_gemini(task="reranking")
-        from google.genai import types as genai_types
+        client = _get_groq()
 
         context_parts = []
         for r in search_results[:5]:
@@ -582,17 +587,18 @@ def extract_competitor_features(
 
         _track("llm_calls")
         with _Timer("extract_competitor_features"):
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config=genai_types.GenerateContentConfig(
-                    temperature=0.2,
-                    max_output_tokens=2048,
-                    response_mime_type="application/json",
-                ),
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a precise data extraction AI. Output strictly valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                max_tokens=2048,
+                response_format={"type": "json_object"}
             )
 
-        extracted = json.loads(response.text)
+        extracted = json.loads(response.choices[0].message.content)
         competitors = extracted.get("competitors", [])
         logger.info("[Firecrawl] Extracted features for %d competitors.", len(competitors))
         return extracted
@@ -715,7 +721,7 @@ def _embed_and_store(competitors: List[Dict[str, Any]]) -> None:
         _track("llm_calls")
         with _Timer("batch_embed"):
             embedding_response = client.models.embed_content(
-                model="text-embedding-004",
+                model="gemini-embedding-001",
                 contents=texts,         # list → batch call
             )
 
@@ -766,7 +772,7 @@ def find_similar_competitors(
         # Embed the query
         _track("llm_calls")
         q_response = client.models.embed_content(
-            model="text-embedding-004",
+            model="gemini-embedding-001",
             contents=query_text,
         )
         q_vector = q_response.embeddings[0].values
@@ -867,8 +873,7 @@ def iterative_gap_search(
             break
 
         try:
-            client = _get_gemini(task="consensus")
-            from google.genai import types as genai_types
+            client = _get_groq()
 
             competitors = extracted_features.get("competitors", [])
             competitor_names = [c.get("name", "") for c in competitors if c.get("name")]
@@ -888,17 +893,15 @@ def iterative_gap_search(
 
             _track("llm_calls")
             with _Timer(f"iterative_gap_iter{iteration+1}"):
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=prompt,
-                    config=genai_types.GenerateContentConfig(
-                        temperature=0.2,
-                        max_output_tokens=256,
-                        response_mime_type="application/json",
-                    ),
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=256,
+                    response_format={"type": "json_object"}
                 )
 
-            result = json.loads(response.text)
+            result = json.loads(response.choices[0].message.content)
             if result.get("sufficient", True):
                 logger.info("[Firecrawl] LLM confirms data sufficient. Stopping.")
                 break

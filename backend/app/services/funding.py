@@ -23,13 +23,15 @@ import json
 from typing import Any, Dict, List
 
 from app.core.config import settings
-from app.services.ai_pipeline import _get_firecrawl, _get_gemini
+from app.services.ai_pipeline import _get_firecrawl, _get_groq
+from app.core.logging_utils import clean_error
 from app.schemas.ai_reports import (
     CompetitorFunding,
     FundingRound,
     FundingIntelligenceReport,
 )
 from google.genai import types as genai_types
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 # =====================================================================
@@ -146,9 +148,9 @@ def extract_funding(
         source_urls: List of source URLs where data was found.
 
     Returns:
-        CompetitorFunding with extracted rounds.
     """
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     user_prompt = (
         f"Competitor: {competitor_name}\n\n"
@@ -158,17 +160,24 @@ def extract_funding(
     current_prompt = user_prompt
     for attempt in range(3):
         try:
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=current_prompt,
-                config=genai_types.GenerateContentConfig(
-                    system_instruction=_FUNDING_EXTRACTION_PROMPT,
-                    response_mime_type="application/json",
-                    temperature=0.3,
-                ),
+            @retry(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1.5, min=2, max=10),
+                reraise=True
             )
-
-            raw = response.text
+            def _do_extract():
+                return client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": _FUNDING_EXTRACTION_PROMPT},
+                        {"role": "user", "content": current_prompt},
+                    ],
+                    temperature=0.3,
+                    response_format={"type": "json_object"},
+                )
+            
+            response = _do_extract()
+            raw = response.choices[0].message.content
             data = json.loads(raw)
 
             rounds = []
@@ -195,7 +204,7 @@ def extract_funding(
                 )
                 continue
             else:
-                print(f"[Funding] Extraction failed for {competitor_name}: {e}", flush=True)
+                print(f"[Funding] Extraction failed for {competitor_name}: {clean_error(e)}", flush=True)
                 return CompetitorFunding(competitor_name=competitor_name)
 
     return CompetitorFunding(competitor_name=competitor_name)
@@ -218,7 +227,8 @@ def synthesize_funding_landscape(all_funding: List[CompetitorFunding]) -> str:
     if not all_funding:
         return "No funding data available for landscape analysis."
 
-    client = _get_gemini()
+    client = _get_groq()
+    model_name = "llama-3.3-70b-versatile"
 
     summary_parts = []
     for cf in all_funding:
@@ -231,26 +241,27 @@ def synthesize_funding_landscape(all_funding: List[CompetitorFunding]) -> str:
         )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=(
-                "Analyze this competitive funding landscape and provide insights:\n\n"
-                + "\n".join(summary_parts)
-            ),
-            config=genai_types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a venture capital analyst. Analyze the funding data "
-                    "and provide a concise markdown report on the competitive funding "
-                    "landscape. Cover: total market capital, investor patterns, stage "
-                    "distribution, and what this means for a new entrant."
-                ),
-                temperature=0.5,
-            ),
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1.5, min=2, max=10),
+            reraise=True
         )
-        return response.text or "Landscape synthesis failed."
+        def _do_synthesize():
+            return client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a venture capital analyst. Analyze the funding data and provide a concise markdown report on the competitive funding landscape. Cover: total market capital, investor patterns, stage distribution, and what this means for a new entrant."},
+                    {"role": "user", "content": "Analyze this competitive funding landscape and provide insights:\n\n" + "\n".join(summary_parts)},
+                ],
+                temperature=0.5,
+            )
+            
+        response = _do_synthesize()
+        raw = response.choices[0].message.content
+        return raw or "Landscape synthesis failed."
     except Exception as e:
-        print(f"[Funding] Landscape synthesis failed: {e}", flush=True)
-        return f"Funding landscape analysis unavailable: {e}"
+        print(f"[Funding] Landscape synthesis failed: {clean_error(e)}", flush=True)
+        return "Funding landscape analysis unavailable due to AI provider quota limits. We are automatically retrying or falling back to cached data. Please try again in a few minutes."
 
 
 # =====================================================================
@@ -328,4 +339,4 @@ def _store_funding_data(
                 "source_url": cf.source_url,
             }).execute()
         except Exception as e:
-            print(f"[Funding] Failed to store data for {cf.competitor_name}: {e}", flush=True)
+            print(f"[Funding] Failed to store data for {cf.competitor_name}: {clean_error(e)}", flush=True)

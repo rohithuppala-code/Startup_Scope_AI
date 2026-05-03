@@ -78,14 +78,39 @@ _MAX_FILE_BYTES = 10 * 1024 * 1024   # 10 MB hard cap on chat uploads
 # own JWT check), wire up a separate InternalUserDep that validates a shared
 # secret or mTLS instead of exposing the header to clients.
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+
+security = HTTPBearer(auto_error=False)
+
 async def get_current_user_id(
-    x_user_id: Annotated[str, Header(description="Authenticated user UUID", alias="X-User-Id")]
+    x_user_id: Annotated[Optional[str], Header(description="Fallback user UUID", alias="X-User-Id")] = None,
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> str:
+    user_id = None
+    if auth and auth.credentials:
+        try:
+            sb = get_supabase()
+            user_res = sb.auth.get_user(auth.credentials)
+            if user_res and user_res.user:
+                user_id = user_res.user.id
+        except Exception as e:
+            pass # fallback to x_user_id
+            
+    if not user_id:
+        user_id = x_user_id
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header or X-User-Id fallback."
+        )
+
     try:
-        uuid_module.UUID(x_user_id)
+        uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="X-User-Id must be a valid UUID.")
-    return x_user_id
+        raise HTTPException(status_code=400, detail="User ID must be a valid UUID.")
+    return user_id
 
 
 # ---------------------------------------------------------------------------

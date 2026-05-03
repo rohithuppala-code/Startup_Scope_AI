@@ -12,14 +12,18 @@ source "$SCRIPT_DIR/venv/bin/activate"
 export PYTHONPATH="$PROJECT_ROOT:$SCRIPT_DIR"
 export GRPC_ENABLE_FORK_SUPPORT=1
 
+echo "🧹 Cleaning up previous instances..."
+pkill -9 -f "celery" 2>/dev/null || true
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+sleep 1
+
 cleanup() {
     echo ""
     echo "🛑 Shutting down backend..."
     [ -n "$CELERY_WORKER_PID" ] && kill -9 $CELERY_WORKER_PID 2>/dev/null
     [ -n "$CELERY_BEAT_PID" ]   && kill -9 $CELERY_BEAT_PID 2>/dev/null
     [ -n "$UVICORN_PID" ]       && kill -9 $UVICORN_PID 2>/dev/null
-    pkill -9 -f "celery worker" 2>/dev/null || true
-    pkill -9 -f "celery beat" 2>/dev/null || true
+    pkill -9 -f "celery" 2>/dev/null || true
     wait 2>/dev/null
     echo "✅ Backend stopped."
     exit 0
@@ -35,20 +39,20 @@ echo "🐳 [1/4] Starting Docker infrastructure..."
 (cd "$SCRIPT_DIR" && docker compose up -d 2>&1) || echo "⚠️  Docker skipped (may already be running)"
 sleep 2
 
-# 2. Celery Worker (Clear stale workers first)
+# 2. Celery Worker (Clear stale workers and queue first)
 echo "⚙️  [2/4] Starting Celery worker..."
-pkill -9 -f "celery worker" 2>/dev/null || true
+pkill -9 -f "celery" 2>/dev/null || true
+echo "   Purging old ghost tasks from RabbitMQ queue..."
+(cd "$SCRIPT_DIR" && celery -A app.worker.celery_tasks.celery_app purge -f 2>/dev/null) || true
 sleep 1
 (cd "$SCRIPT_DIR" && celery -A app.worker.celery_tasks.celery_app worker \
     --loglevel=info --concurrency=2 2>&1 | sed 's/^/  [worker] /') &
 CELERY_WORKER_PID=$!
 sleep 1
 
-# 3. Celery Beat (clear stale lock first)
+# 3. Celery Beat
 echo "⏰ [3/4] Starting Celery Beat..."
-redis-cli -u redis://localhost:6380/0 DEL "redbeat::lock" > /dev/null 2>&1 || true
 (cd "$SCRIPT_DIR" && celery -A app.worker.celery_tasks.celery_app beat \
-    --scheduler=redbeat.RedBeatScheduler \
     --loglevel=info 2>&1 | sed 's/^/  [beat] /') &
 CELERY_BEAT_PID=$!
 sleep 1

@@ -42,6 +42,7 @@ import logging
 from app.core.config import settings
 from app.schemas.ai_reports import AIReportResponse, ReportDetails
 from app.core.telemetry import track_ai_call
+from app.core.logging_utils import clean_error
 
 logger = logging.getLogger(__name__)
 
@@ -66,24 +67,34 @@ def _get_firecrawl() -> FirecrawlApp:
     return _firecrawl_app
 
 
+import itertools
+
+_gemini_keys_pool = []
+_gemini_key_cycle = None
+
+def _get_gemini_key_pool():
+    global _gemini_keys_pool, _gemini_key_cycle
+    if not _gemini_keys_pool:
+        # Collect all valid keys from config to distribute load evenly
+        keys = [
+            settings.GEMINI_API_KEY,
+            settings.GEMINI_EMBEDDING,
+            settings.WEB_RERANKING,
+            settings.MAIN_Consensus_PIPELINE,
+            settings.PATENT,
+            settings.temporal_memory_comparision,
+        ]
+        # Filter out empty or placeholder keys
+        _gemini_keys_pool = [k for k in keys if k and len(k) > 10]
+        if not _gemini_keys_pool:
+            raise ValueError("No valid Gemini API keys found in config")
+        _gemini_key_cycle = itertools.cycle(_gemini_keys_pool)
+    return _gemini_key_cycle
+
 def _get_gemini(task: str = "default") -> genai.Client:
-    """Returns a module-level Gemini client singleton for the specified task."""
-    global _gemini_clients
-    if task not in _gemini_clients:
-        key = settings.GEMINI_API_KEY
-        if task == "embedding" and settings.GEMINI_EMBEDDING:
-            key = settings.GEMINI_EMBEDDING
-        elif task == "reranking" and settings.WEB_RERANKING:
-            key = settings.WEB_RERANKING
-        elif task == "consensus" and settings.MAIN_Consensus_PIPELINE:
-            key = settings.MAIN_Consensus_PIPELINE
-        elif task == "patent" and settings.PATENT:
-            key = settings.PATENT
-        elif task == "temporal" and settings.temporal_memory_comparision:
-            key = settings.temporal_memory_comparision
-        
-        _gemini_clients[task] = genai.Client(api_key=key)
-    return _gemini_clients[task]
+    """Returns a module-level Gemini client using a round-robin key pool to prevent 429 errors."""
+    pool = _get_gemini_key_pool()
+    return genai.Client(api_key=next(pool))
 
 
 def _get_groq() -> Groq:
@@ -184,7 +195,7 @@ def firecrawl_scrape(idea_description: str) -> Tuple[str, List[str]]:
         markdown, urls, _features = run_firecrawl_pipeline(idea_description)
         return markdown, urls
     except Exception as e:
-        print(f"[Firecrawl] Advanced pipeline failed, using fallback: {e}", flush=True)
+        print(f"[Firecrawl] Advanced pipeline failed, using fallback: {clean_error(e)}", flush=True)
         return _firecrawl_scrape_fallback(idea_description)
 
 
@@ -201,7 +212,7 @@ def firecrawl_scrape_advanced(
         from app.services.firecrawl_pipeline import run_firecrawl_pipeline
         return run_firecrawl_pipeline(idea_description, target_market, budget_constraints)
     except Exception as e:
-        print(f"[Firecrawl] Advanced pipeline failed: {e}", flush=True)
+        print(f"[Firecrawl] Advanced pipeline failed: {clean_error(e)}", flush=True)
         md, urls = _firecrawl_scrape_fallback(idea_description)
         return md, urls, {"competitors": []}
 
@@ -244,7 +255,7 @@ def _firecrawl_scrape_fallback(idea_description: str) -> Tuple[str, List[str]]:
         return "\n\n---\n\n".join(competitor_results), competitor_urls
 
     except Exception as e:
-        print(f"[Firecrawl] Fallback API error: {e}", flush=True)
+        print(f"[Firecrawl] Fallback API error: {clean_error(e)}", flush=True)
         return "Firecrawl search failed or timed out. Competitor data unavailable.", []
 
 
@@ -290,7 +301,7 @@ def embed_text(text: str) -> List[float]:
 
         return []
     except Exception as e:
-        print(f"[Gemini] Embedding failed: {e}", flush=True)
+        print(f"[Gemini] Embedding failed: {clean_error(e)}", flush=True)
         return []
 
 
@@ -345,9 +356,9 @@ def generate_gemini_report(
     user_prompt = "\n".join(user_prompt_parts)
 
     # Models to try in order (rate-limit cascade).
-    # gemini-1.5-flash was REMOVED — it returns 404 on the v1beta API.
-    # gemini-2.0-flash-lite is the valid lightweight fallback on v1beta.
-    models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
+    # gemini-2.0-flash free tier quota is 0 in some regions/projects.
+    # We use gemini-2.5-flash and gemini-flash-latest instead.
+    models_to_try = ["gemini-2.5-flash", "gemini-flash-latest"]
     last_error: Exception | None = None
 
     for model_name in models_to_try:
@@ -428,7 +439,7 @@ def generate_gemini_report(
                     last_error = e
                     break  # Break inner loop, try next model
                 else:
-                    print(f"[Gemini] Generation failed with {model_name}: {e}", flush=True)
+                    print(f"[Gemini] Generation failed with {model_name}: {clean_error(e)}", flush=True)
                     raise
 
     # If all models and all self-heal attempts fail
@@ -548,7 +559,7 @@ def generate_groq_report(
                 current_user_prompt = user_prompt  # Reset to original prompt
                 continue
             else:
-                print(f"[Groq] Generation failed: {e}", flush=True)
+                print(f"[Groq] Generation failed: {clean_error(e)}", flush=True)
                 raise
 
     raise last_error or RuntimeError("All Groq self-heal attempts exhausted.")

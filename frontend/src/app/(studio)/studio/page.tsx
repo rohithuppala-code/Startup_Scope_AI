@@ -35,7 +35,6 @@ const sectionIcons: Record<string, React.ElementType> = {
   consensus: Sparkles,
   recommendation: Lightbulb,
   funding: TrendingUp,
-  sentiment: Users,
   jobs: Lightbulb,
   traffic: TrendingUp,
 };
@@ -48,7 +47,6 @@ const sectionLabels: Record<string, string> = {
   consensus: "Multi-Model Consensus",
   recommendation: "Final Recommendation",
   funding: "Funding Intelligence",
-  sentiment: "Social Sentiment",
   jobs: "Job Market Signal",
   traffic: "Web Traffic Analysis",
 };
@@ -158,7 +156,7 @@ export default function StudioPage() {
   };
 
   const handleRagSend = async () => {
-    if (!ragInput.trim() || !validationId || ragLoading) return;
+    if (!ragInput.trim() || !validationId || ragLoading || !userId) return;
     const question = ragInput.trim();
     setRagMessages((prev) => [...prev, { role: "user", content: question }]);
     setRagInput("");
@@ -168,6 +166,7 @@ export default function StudioPage() {
         `/api/v1/chat/${validationId}`,
         {
           method: "POST",
+          userId,
           body: {
             question,
             history: ragMessages.slice(-10),

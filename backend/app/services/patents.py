@@ -30,10 +30,13 @@ import json
 from typing import Any, Dict, List
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-from app.services.ai_pipeline import _get_gemini
+from app.services.ai_pipeline import _get_groq
 from app.schemas.ai_reports import PatentResult, PatentReport
 from google.genai import types as genai_types
+from google.genai.errors import APIError
+from app.core.logging_utils import clean_error
 
 
 # =====================================================================
@@ -61,26 +64,43 @@ def _extract_patent_keywords(idea_description: str) -> List[str]:
     Returns a list of keyword strings suitable for USPTO search.
     Falls back to splitting the idea into 3-word chunks on failure.
     """
-    try:
-        client = _get_gemini(task="patent")
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=idea_description,
-            config=genai_types.GenerateContentConfig(
-                system_instruction=_KEYWORD_EXTRACTION_PROMPT,
-                response_mime_type="application/json",
-                temperature=0.2,
-            ),
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1.5, min=2, max=10),
+        reraise=True
+    )
+    def _do_extract() -> List[str]:
+        client = _get_groq()
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": _KEYWORD_EXTRACTION_PROMPT},
+                {"role": "user", "content": idea_description},
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
         )
-        raw = response.text
-        keywords = json.loads(raw)
-
+        raw = response.choices[0].message.content
+        data = json.loads(raw)
+        
+        # Groq might wrap the array in a dict like {"keywords": [...]} if asked for json_object
+        if isinstance(data, dict):
+            # Find the first list value
+            keywords = next((v for v in data.values() if isinstance(v, list)), [])
+        else:
+            keywords = data
+            
         if isinstance(keywords, list) and keywords:
             print(f"[Patents] Extracted keywords: {keywords}", flush=True)
             return keywords[:5]
+        return []
 
+    try:
+        keywords = _do_extract()
+        if keywords:
+            return keywords
     except Exception as e:
-        print(f"[Patents] Keyword extraction failed: {e}", flush=True)
+        print(f"[Patents] Keyword extraction failed: {clean_error(e)}", flush=True)
 
     # Fallback: use first 5 meaningful words from the idea
     words = [w for w in idea_description.split() if len(w) > 3][:5]
@@ -161,9 +181,11 @@ def _query_uspto(keywords: List[str]) -> List[Dict[str, Any]]:
     except requests.exceptions.Timeout:
         print("[Patents] USPTO API timed out. Falling back to Gemini.", flush=True)
     except requests.exceptions.HTTPError as e:
-        print(f"[Patents] USPTO API HTTP error: {e}. Falling back to Gemini.", flush=True)
+        print(f"[Patents] USPTO API HTTP error: {clean_error(e)}. Falling back to Gemini.", flush=True)
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"[Patents] USPTO API returned invalid JSON: {e}. Falling back to Gemini.", flush=True)
     except Exception as e:
-        print(f"[Patents] USPTO API error: {e}. Falling back to Gemini.", flush=True)
+        print(f"[Patents] USPTO API error: {clean_error(e)}. Falling back to Gemini.", flush=True)
 
     # -------------------------------------------------------------------------
     # FALLBACK: USPTO API is deprecated (410 Gone) or down. 
@@ -171,37 +193,48 @@ def _query_uspto(keywords: List[str]) -> List[Dict[str, Any]]:
     # -------------------------------------------------------------------------
     try:
         print("[Patents] Using Gemini to query patent knowledge...", flush=True)
-        client = _get_gemini(task="patent")
-        fallback_prompt = (
-            f"The user searched the USPTO for patents related to these keywords: {keywords}.\n"
-            "Identify 3 real-world, well-known patents related to this technology from your training data.\n"
-            "Output ONLY a valid JSON array of objects with this EXACT schema:\n"
-            "[\n"
-            "  {\n"
-            '    "patent_number": "1045291",\n'
-            '    "patent_title": "Example Patent Title",\n'
-            '    "patent_abstract": "A brief summary of what this patent covers...",\n'
-            '    "patent_date": "2019-05-14",\n'
-            '    "assignee_organization": "Example Corp",\n'
-            '    "inventor_first_name": "John",\n'
-            '    "inventor_last_name": "Doe"\n'
-            "  }\n"
-            "]\n"
-            "Do not include markdown blocks, just the JSON array."
+        
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1.5, min=2, max=10),
+            reraise=True
         )
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=fallback_prompt,
-            config=genai_types.GenerateContentConfig(
-                response_mime_type="application/json",
+        def _do_fallback():
+            client = _get_groq()
+            fallback_prompt = (
+                f"The user searched the USPTO for patents related to these keywords: {keywords}.\n"
+                "Identify 3 real-world, well-known patents related to this technology from your training data.\n"
+                "Output ONLY a valid JSON object with a 'patents' array containing objects with this EXACT schema:\n"
+                "{\n"
+                '  "patents": [\n'
+                "    {\n"
+                '      "patent_number": "1045291",\n'
+                '      "patent_title": "Example Patent Title",\n'
+                '      "patent_abstract": "A brief summary of what this patent covers...",\n'
+                '      "patent_date": "2019-05-14",\n'
+                '      "assignee_organization": "Example Corp",\n'
+                '      "inventor_first_name": "John",\n'
+                '      "inventor_last_name": "Doe"\n'
+                "    }\n"
+                "  ]\n"
+                "}"
+            )
+            return client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "user", "content": fallback_prompt},
+                ],
                 temperature=0.3,
-            ),
-        )
-        data = json.loads(response.text)
-        if isinstance(data, list):
+                response_format={"type": "json_object"},
+            )
+            
+        response = _do_fallback()
+        data = json.loads(response.choices[0].message.content)
+        patent_list = data.get("patents", [])
+        if isinstance(patent_list, list):
             # Wrap to match the USPTO API nested structure
             mocked_patents = []
-            for p in data:
+            for p in patent_list:
                 mocked_patents.append({
                     "patent_number": p.get("patent_number"),
                     "patent_title": p.get("patent_title"),
@@ -212,7 +245,7 @@ def _query_uspto(keywords: List[str]) -> List[Dict[str, Any]]:
                 })
             return mocked_patents
     except Exception as gemini_err:
-        print(f"[Patents] Gemini fallback failed: {gemini_err}. Using hardcoded mock.", flush=True)
+        print(f"[Patents] Gemini fallback failed: {clean_error(gemini_err)}. Using hardcoded mock.", flush=True)
         return [{
             "patent_number": "11234567",
             "patent_title": "System and method for intelligent startup analysis",
@@ -278,7 +311,7 @@ def _parse_patents(raw_patents: List[Dict[str, Any]]) -> List[PatentResult]:
             ))
 
         except Exception as e:
-            print(f"[Patents] Failed to parse patent: {e}", flush=True)
+            print(f"[Patents] Failed to parse patent: {clean_error(e)}", flush=True)
             continue
 
     return results
@@ -304,7 +337,7 @@ def _analyze_ip_landscape(
     if not patents:
         return "No relevant patents found. The IP landscape appears clear for this idea."
 
-    client = _get_gemini(task="patent")
+    client = _get_groq()
 
     patents_summary = "\n".join(
         f"- **{p.title}** (US{p.patent_number}, {p.filing_date})\n"
@@ -314,29 +347,27 @@ def _analyze_ip_landscape(
     )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=(
-                f"Startup Idea: {idea_description}\n\n"
-                f"Relevant Patents Found ({len(patents)} total):\n{patents_summary}"
-            ),
-            config=genai_types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a patent and IP analyst. Analyze the patent landscape "
-                    "for the given startup idea. Provide a concise markdown report:\n"
-                    "1. **Key Patent Holders**: Who owns the most relevant IP?\n"
-                    "2. **IP Risk Assessment**: Could any patents block this startup?\n"
-                    "3. **White Space**: Areas NOT covered by existing patents.\n"
-                    "4. **Freedom-to-Operate**: Overall assessment (Low/Medium/High risk).\n\n"
-                    "Be specific about patent numbers when referencing them."
-                ),
-                temperature=0.4,
-            ),
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1.5, min=2, max=10),
+            reraise=True
         )
-        return response.text or "IP analysis generation failed."
+        def _do_analyze():
+            return client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a patent and IP analyst. Analyze the patent landscape for the given startup idea. Provide a concise markdown report:\n1. **Key Patent Holders**: Who owns the most relevant IP?\n2. **IP Risk Assessment**: Could any patents block this startup?\n3. **White Space**: Areas NOT covered by existing patents.\n4. **Freedom-to-Operate**: Overall assessment (Low/Medium/High risk).\n\nBe specific about patent numbers when referencing them."},
+                    {"role": "user", "content": f"Startup Idea: {idea_description}\n\nRelevant Patents Found ({len(patents)} total):\n{patents_summary}"},
+                ],
+                temperature=0.4,
+            )
+            
+        response = _do_analyze()
+        raw = response.choices[0].message.content
+        return raw or "IP analysis generation failed."
     except Exception as e:
-        print(f"[Patents] IP analysis failed: {e}", flush=True)
-        return f"IP landscape analysis unavailable: {e}"
+        print(f"[Patents] IP analysis failed: {clean_error(e)}", flush=True)
+        return "IP landscape analysis unavailable due to AI provider quota limits. We are automatically retrying or falling back to cached data. Please try again in a few minutes."
 
 
 # =====================================================================

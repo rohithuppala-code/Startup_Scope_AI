@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from datetime import datetime, timezone
+import traceback
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -42,7 +43,7 @@ from celery.exceptions import Retry
 from supabase import create_client, Client
 
 from app.core.config import settings
-from app.worker.celery_beat import BEAT_SCHEDULE, REDBEAT_CONFIG
+from app.worker.celery_beat import BEAT_SCHEDULE
 
 # ── Service imports (all Tier 1, 2, & 3 features) ───────────────────
 from app.services.ai_pipeline import (
@@ -56,7 +57,6 @@ from app.services.consensus import merge_reports
 from app.services.rag import chunk_text, embed_and_store_chunks, retrieve_context
 from app.services.pricing import run_pricing_pipeline
 from app.services.funding import run_funding_pipeline
-from app.services.sentiment import run_sentiment_pipeline
 from app.services.patents import run_patent_pipeline
 from app.services.jobs import run_jobs_pipeline
 from app.services.traffic import run_traffic_pipeline
@@ -71,6 +71,8 @@ from app.services.redis_memory import (
     find_similar_ideas,
     get_similarity_insights,
 )
+from app.core.logging_utils import clean_error
+
 
 
 # =====================================================================
@@ -118,9 +120,8 @@ celery_app.conf.update(
         },
     },
 
-    # ── Celery Beat (RedBeat) ────────────────────────────────────────
+    # ── Celery Beat ────────────────────────────────────────
     beat_schedule=BEAT_SCHEDULE,
-    **REDBEAT_CONFIG,
 )
 
 # Register the webhook task with Celery
@@ -370,6 +371,9 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                     return {"status": "failed", "message": "Cost limit exceeded."}
 
             # ── STEP 5: ADVANCED FIRECRAWL PIPELINE ──────────────────────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 5: ADVANCED FIRECRAWL PIPELINE (Web Search & Scrape)", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
             # Uses the full Search→Rank→Scrape→Extract→Iterate pipeline.
             competitor_data, competitor_urls, extracted_features = firecrawl_scrape_advanced(
                 idea_description, target_market, budget_constraints
@@ -379,6 +383,7 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                   f"{len(extracted_features.get('competitors', []))} structured competitors.", flush=True)
 
             # ── STEP 5b: REDIS SIMILARITY SEARCH ─────────────────────────
+            print("[Worker] === STEP 5b: REDIS SIMILARITY SEARCH ===", flush=True)
             # Check if similar ideas have been evaluated before.
             # Inject historical insights into the LLM prompt.
             idea_embedding_early = embed_text(idea_description)
@@ -396,6 +401,9 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                     print(f"[Worker] 🧠 Found {len(similar_ideas)} similar past ideas.", flush=True)
 
             # ── STEP 6: RAG — CHUNK + EMBED + STORE ─────────────────────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 6: RAG (CHUNK + EMBED + STORE)", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
             chunks = chunk_text(competitor_data, chunk_size_tokens=500)
             if chunks:
                 embed_and_store_chunks(
@@ -405,6 +413,9 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                 )
 
             # ── STEP 7: RAG — RETRIEVE GROUNDED CONTEXT ─────────────────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 7: RAG (RETRIEVE CONTEXT)", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
             grounding_context = retrieve_context(
                 query_text=enriched_idea,
                 validation_id=validation_id,
@@ -415,35 +426,33 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             if similarity_context:
                 grounding_context += f"\n\n{similarity_context}"
 
-            # ── STEP 8: PARALLEL AI — GEMINI + GROQ (with self-heal) ────
-            # Both are I/O-bound HTTP calls. Run in parallel via ThreadPool.
+            # ── STEP 8: SERIAL AI — GEMINI THEN GROQ (with self-heal) ────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 8: CORE AI ANALYSIS (GEMINI & GROQ)", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
+            # Run sequentially to prevent rate limits or concurrent API issues.
             gemini_result: Optional[tuple] = None
             groq_result: Optional[tuple] = None
 
-            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai") as executor:
-                gemini_future = executor.submit(
-                    generate_gemini_report,
+            print("[Worker] Executing Gemini report...", flush=True)
+            try:
+                gemini_result = generate_gemini_report(
                     idea_description=enriched_idea,
                     competitor_data=competitor_data,
                     grounding_context=grounding_context,
                 )
-                groq_future = executor.submit(
-                    generate_groq_report,
+            except Exception as e:
+                print(f"[Worker] ❌ Gemini failed: {clean_error(e)}", flush=True)
+
+            print("[Worker] Executing Groq fallback...", flush=True)
+            try:
+                groq_result = generate_groq_report(
                     idea_description=enriched_idea,
                     competitor_data=competitor_data,
                     grounding_context=grounding_context,
                 )
-
-                # Wait for both — but don't let one failure kill the other
-                try:
-                    gemini_result = gemini_future.result(timeout=180)
-                except Exception as e:
-                    print(f"[Worker] Gemini failed: {e}", flush=True)
-
-                try:
-                    groq_result = groq_future.result(timeout=60)
-                except Exception as e:
-                    print(f"[Worker] Groq failed: {e}", flush=True)
+            except Exception as e:
+                print(f"[Worker] ❌ Groq failed: {clean_error(e)}", flush=True)
 
             # At least one model must succeed
             if gemini_result is None and groq_result is None:
@@ -461,6 +470,9 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             total_cost = gemini_cost + groq_cost
 
             # ── STEP 9: CONSENSUS MERGE ──────────────────────────────────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 9: CONSENSUS MERGE", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
             if gemini_result and groq_result:
                 # Both models succeeded — full consensus merge
                 consensus = merge_reports(
@@ -511,124 +523,87 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             })
             print(f"[Worker] ⚡ Streamed 'consensus' section for {validation_id}.", flush=True)
 
-            # ── STEP 10: PARALLEL DATA PIPELINES (Features 5–10) ─────────
-            # All 6 data pipelines run in parallel. Each publishes a partial
+            # ── STEP 10: SERIAL DATA PIPELINES (Features 5–10) ─────────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 10: SECONDARY DATA EXTRACTION PIPELINES", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
+            # All 6 data pipelines run in sequence. Each publishes a partial
             # WebSocket event the INSTANT it finishes (Feature 11: Progressive
             # Streaming), so the frontend can render sections live without
             # waiting for the entire pipeline to complete.
             pricing_report = None
             funding_report = None
-            sentiment_report = None
             patent_report = None
             jobs_report = None
             traffic_report = None
 
-            with ThreadPoolExecutor(max_workers=6, thread_name_prefix="data") as executor:
-                futures = {}
+            # Execute sequentially to prevent 429 RESOURCE_EXHAUSTED from AI providers
+            
+            def execute_and_stream(name, func, **kwargs):
+                print(f"\n[Worker] ⏳ RUNNING PIPELINE: [{name.upper()}]...", flush=True)
+                try:
+                    result = func(**kwargs)
+                    section_data = result.model_dump() if hasattr(result, "model_dump") else {}
+                    _publish_event(validation_id, {
+                        "validation_id": validation_id,
+                        "status": "processing",
+                        "section": name,
+                        "data": section_data,
+                    })
+                    print(f"[Worker] ✅ SUCCESS: [{name.upper()}] completed beautifully.", flush=True)
+                    print(f"[Worker] ⚡ STREAMED: '{name}' section pushed to Frontend.", flush=True)
+                    return result
+                except Exception as e:
+                    print(f"[Worker] ❌ FAILED: [{name.upper()}] pipeline crashed: {clean_error(e)}", flush=True)
+                    return None
 
-                if competitor_urls:
-                    futures["pricing"] = executor.submit(
-                        run_pricing_pipeline,
-                        competitor_urls=competitor_urls,
-                        validation_id=validation_id,
-                    )
-                    futures["funding"] = executor.submit(
-                        run_funding_pipeline,
-                        competitor_names=competitor_names,
-                        validation_id=validation_id,
-                    )
-
-                # BUG FIX: Only submit sentiment if we actually have competitor names.
-                # Previously this always ran even with an empty list, producing
-                # meaningless Neutral results stored unnecessarily in Supabase.
-                if competitor_names:
-                    futures["sentiment"] = executor.submit(
-                        run_sentiment_pipeline,
-                        competitor_names=competitor_names,
-                        idea_description=idea_description,
-                        validation_id=validation_id,
-                    )
-
-                # Feature 8: Patent & IP scan
-                futures["patents"] = executor.submit(
-                    run_patent_pipeline,
-                    idea_description=idea_description,
+            if competitor_urls:
+                pricing_report = execute_and_stream(
+                    "pricing",
+                    run_pricing_pipeline,
+                    competitor_urls=competitor_urls,
+                    validation_id=validation_id,
+                )
+                funding_report = execute_and_stream(
+                    "funding",
+                    run_funding_pipeline,
                     competitor_names=competitor_names,
                     validation_id=validation_id,
                 )
 
-                # Feature 9: Job posting signal
-                if competitor_names:
-                    futures["jobs"] = executor.submit(
-                        run_jobs_pipeline,
-                        competitor_names=competitor_names,
-                        idea_description=idea_description,
-                        validation_id=validation_id,
-                    )
+            # Feature 8: Patent & IP scan
+            patent_report = execute_and_stream(
+                "patents",
+                run_patent_pipeline,
+                idea_description=idea_description,
+                competitor_names=competitor_names,
+                validation_id=validation_id,
+            )
 
-                # Feature 10: Web traffic intelligence
-                if competitor_names:
-                    futures["traffic"] = executor.submit(
-                        run_traffic_pipeline,
-                        competitor_names=competitor_names,
-                        idea_description=idea_description,
-                        validation_id=validation_id,
-                    )
+            # Feature 9: Job posting signal
+            if competitor_names:
+                jobs_report = execute_and_stream(
+                    "jobs",
+                    run_jobs_pipeline,
+                    competitor_names=competitor_names,
+                    idea_description=idea_description,
+                    validation_id=validation_id,
+                )
 
-                # ── FEATURE 11: PROGRESSIVE STREAMING ────────────────────
-                # Use as_completed() so we publish each section the INSTANT
-                # its future resolves, not after all futures finish.
-                future_to_name = {v: k for k, v in futures.items()}
-
-                # BUG FIX: A TimeoutError from as_completed() previously
-                # propagated up as an unhandled exception, causing the entire
-                # task to be retried even when the AI consensus already
-                # succeeded and only one slow data pipeline timed out.
-                # We now catch TimeoutError here, log it, and continue to
-                # the final write-through step with whatever results we have.
-                try:
-                    for completed_future in as_completed(futures.values(), timeout=180):
-                        name = future_to_name.get(completed_future, "unknown")
-                        try:
-                            result = completed_future.result()
-
-                            # Store the result in the appropriate variable
-                            if name == "pricing":
-                                pricing_report = result
-                            elif name == "funding":
-                                funding_report = result
-                            elif name == "sentiment":
-                                sentiment_report = result
-                            elif name == "patents":
-                                patent_report = result
-                            elif name == "jobs":
-                                jobs_report = result
-                            elif name == "traffic":
-                                traffic_report = result
-
-                            # ── STREAM THIS SECTION IMMEDIATELY ──────────────
-                            # The frontend receives this partial payload and can
-                            # render the section before the full pipeline is done.
-                            section_data = result.model_dump() if hasattr(result, "model_dump") else {}
-                            _publish_event(validation_id, {
-                                "validation_id": validation_id,
-                                "status": "processing",
-                                "section": name,
-                                "data": section_data,
-                            })
-                            print(f"[Worker] ⚡ Streamed '{name}' section for {validation_id}.", flush=True)
-
-                        except Exception as e:
-                            print(f"[Worker] {name.title()} pipeline failed (non-fatal): {e}", flush=True)
-
-                except FutureTimeoutError:
-                    print(
-                        f"[Worker] ⏱️ Data pipeline timeout for {validation_id}. "
-                        "Proceeding with partial results (consensus already complete).",
-                        flush=True,
-                    )
+            # Feature 10: Web traffic intelligence
+            if competitor_names:
+                traffic_report = execute_and_stream(
+                    "traffic",
+                    run_traffic_pipeline,
+                    competitor_names=competitor_names,
+                    idea_description=idea_description,
+                    validation_id=validation_id,
+                )
 
             # ── STEP 11: TEMPORAL VERSION TRACKING ───────────────────────
+            print("\n[Worker] 🚀 ========================================================", flush=True)
+            print("[Worker] 🚀 STEP 11: TEMPORAL VERSION TRACKING", flush=True)
+            print("[Worker] 🚀 ========================================================", flush=True)
             temporal_diff = run_temporal_comparison(
                 validation_id=validation_id,
                 new_report_json=final_report_json,
@@ -640,6 +615,7 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             )
 
             # ── STEP 11b: SMART ALERTS (Feature 16) ─────────────────────
+            print("[Worker] === STEP 11b: SMART ALERTS ===", flush=True)
             # If the temporal diff detected a significant change (> 0.3),
             # dispatch alerts via Redis Pub/Sub + email.
             process_alert(
@@ -649,6 +625,7 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             )
 
             # ── STEP 12: WRITE-THROUGH TO SUPABASE ──────────────────────
+            print("[Worker] === STEP 12: WRITE-THROUGH TO SUPABASE ===", flush=True)
             # Reuse early embedding if we computed it; otherwise compute now
             idea_embedding = idea_embedding_early if idea_embedding_early else embed_text(idea_description)
 
@@ -692,7 +669,6 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
             final_report_json["competitor_analysis"] = final_report_json.get("gaps_identified", [])
             final_report_json["pricing"] = pricing_report.model_dump() if pricing_report else None
             final_report_json["funding"] = funding_report.model_dump() if funding_report else None
-            final_report_json["sentiment"] = sentiment_report.model_dump() if sentiment_report else None
             final_report_json["patents"] = patent_report.model_dump() if patent_report else None
             final_report_json["jobs"] = jobs_report.model_dump() if jobs_report else None
             final_report_json["traffic"] = traffic_report.model_dump() if traffic_report else None
@@ -717,7 +693,6 @@ def process_validation(self, validation_id: str, idea_hash: str) -> dict:
                 # Data pipeline summaries (Features 5–10)
                 "pricing_data": pricing_report.model_dump() if pricing_report else None,
                 "funding_data": funding_report.model_dump() if funding_report else None,
-                "sentiment_data": sentiment_report.model_dump() if sentiment_report else None,
                 "patent_data": patent_report.model_dump() if patent_report else None,
                 "jobs_data": jobs_report.model_dump() if jobs_report else None,
                 "traffic_data": traffic_report.model_dump() if traffic_report else None,
