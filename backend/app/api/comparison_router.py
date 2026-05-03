@@ -155,7 +155,7 @@ async def compare_ideas(
     try:
         report = await loop.run_in_executor(
             None,
-            partial(compare_validations, body.validation_ids, x_user_id),
+            partial(compare_validations, body.validation_ids),
         )
         return report
     except ValueError as ve:

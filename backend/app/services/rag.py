@@ -289,6 +289,13 @@ def retrieve_context(
             chunk_embedding = row.get("embedding")
             chunk_text = row.get("chunk_text", "")
 
+            if isinstance(chunk_embedding, str):
+                import json
+                try:
+                    chunk_embedding = json.loads(chunk_embedding)
+                except Exception:
+                    chunk_embedding = None
+
             if not chunk_embedding or not chunk_text:
                 continue
 
@@ -312,7 +319,7 @@ def retrieve_context(
 
 def retrieve_context_structured(
     query_text: str,
-    validation_id: str,
+    user_id: str,
     top_k: int = 10,
 ) -> List[Chunk]:
     """
@@ -328,12 +335,19 @@ def retrieve_context_structured(
     chunks_result: List[Chunk] = []
 
     try:
-        # Fallback: brute-force cosine similarity in Python since RPC match_rag_chunks
-        # might not return source_url or we want to guarantee the fields are present.
+        # Fetch all validation IDs owned by this user
+        user_validations = supabase.table("validations").select("id").eq("user_id", user_id).execute()
+        user_validation_ids = [row["id"] for row in user_validations.data] if user_validations.data else []
+
+        if not user_validation_ids:
+            print("[RAG] No validations found for this user.", flush=True)
+            return []
+
+        # Fallback: brute-force cosine similarity in Python across ALL user data
         all_chunks = (
             supabase.table("rag_chunks")
             .select("chunk_text, embedding, source_url")
-            .eq("validation_id", validation_id)
+            .in_("validation_id", user_validation_ids)
             .execute()
         )
 
@@ -346,6 +360,13 @@ def retrieve_context_structured(
             chunk_embedding = row.get("embedding")
             chunk_text = row.get("chunk_text", "")
             source_url = row.get("source_url") or ""
+
+            if isinstance(chunk_embedding, str):
+                import json
+                try:
+                    chunk_embedding = json.loads(chunk_embedding)
+                except Exception:
+                    chunk_embedding = None
 
             if not chunk_embedding or not chunk_text:
                 continue

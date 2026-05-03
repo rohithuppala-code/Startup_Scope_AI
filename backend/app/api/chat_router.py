@@ -128,7 +128,7 @@ _CHAT_SYSTEM_PROMPT = (
 # Token-budget helpers  (FIX #6 — prevent context overflow)
 # ---------------------------------------------------------------------------
 _CHARS_PER_TOKEN = 4          # rough approximation
-_MAX_CONTEXT_TOKENS = 28_000  # safe headroom under gemini-2.0-flash 32k window
+_MAX_CONTEXT_TOKENS = 28_000  # safe headroom under gemini-2.5-flash 32k window
 _MAX_CONTEXT_CHARS = _MAX_CONTEXT_TOKENS * _CHARS_PER_TOKEN
 
 
@@ -147,7 +147,7 @@ def _call_gemini_sync(prompt: str) -> tuple[str, int]:
     """Blocking Gemini call — must be run via run_in_executor."""
     client = _get_gemini(task="consensus")
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=genai_types.GenerateContentConfig(
             system_instruction=_CHAT_SYSTEM_PROMPT,
@@ -241,7 +241,7 @@ async def chat_with_report(
         partial(
             retrieve_context_structured,
             query_text=body.question,
-            validation_id=validation_id,
+            user_id=x_user_id,
             top_k=RAG_TOP_K,
         ),
     )

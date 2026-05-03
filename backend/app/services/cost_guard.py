@@ -88,6 +88,11 @@ def _get_redis() -> redis.Redis:
 # ---------------------------------------------------------------------------
 
 PRICING_TABLE: dict[str, dict[str, float]] = {
+    # Gemini 2.5 Flash
+    "gemini-2.5-flash": {
+        "input_cost_per_token": 0.075 / 1_000_000,
+        "output_cost_per_token": 0.30 / 1_000_000,
+    },
     # Gemini 2.0 Flash
     "gemini-2.0-flash": {
         "input_cost_per_token": 0.10 / 1_000_000,   # $0.10 per 1M input tokens
@@ -133,8 +138,8 @@ def get_model_pricing(model_name: str) -> dict[str, float]:
         if key in clean_name:
             return PRICING_TABLE[key]
 
-    # Default: Gemini 2.0 Flash (most commonly used)
-    return PRICING_TABLE["gemini-2.0-flash"]
+    # Default: Gemini 2.5 Flash (most commonly used)
+    return PRICING_TABLE["gemini-2.5-flash"]
 
 
 # ---------------------------------------------------------------------------

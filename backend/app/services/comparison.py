@@ -208,7 +208,7 @@ def _run_comparison(reports: List[Dict[str, Any]]) -> ComparisonReport:
     for attempt in range(3):
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=current_prompt,
                 config=genai_types.GenerateContentConfig(
                     system_instruction=_COMPARISON_SYSTEM_PROMPT,

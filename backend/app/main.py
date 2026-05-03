@@ -501,7 +501,7 @@ async def summarize_validation(validation_id: str) -> Dict[str, Any]:
         response = await loop.run_in_executor(
             None,
             lambda: client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     temperature=0.5,
